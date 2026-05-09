@@ -1,90 +1,55 @@
-# data_fetcher.py
-import ccxt
-import pandas as pd
+# data_fetcher.py - VERSI PALING STABIL
 import requests
+import pandas as pd
 import time
-
-exchange = ccxt.indodax({
-    'enableRateLimit': True,
-    'options': {'defaultType': 'spot'}
-})
+from datetime import datetime
 
 def get_all_pairs():
-    """Ambil semua pair IDR dan USDT"""
-    try:
-        markets = exchange.load_markets()
-        pairs = [symbol for symbol in markets if '_idr' in symbol or '_usdt' in symbol]
-        if pairs:
-            print(f"[✓] Mendapatkan {len(pairs)} pasangan via ccxt")
-            return pairs
-    except Exception as e:
-        print(f"[!] ccxt error: {e}, fallback ke API langsung...")
-    
-    # Fallback: API langsung Indodax
+    """Ambil semua pasangan IDR dan USDT"""
     try:
         data = requests.get("https://indodax.com/api/pairs", timeout=10).json()
         pairs = [p['ticker_id'] for p in data if '_idr' in p['ticker_id'] or '_usdt' in p['ticker_id']]
-        print(f"[✓] Mendapatkan {len(pairs)} pasangan via API langsung")
+        print(f"[✓] Mendapatkan {len(pairs)} pasangan")
         return pairs
     except Exception as e:
-        print(f"[!] Gagal total: {e}")
+        print(f"[!] Gagal ambil pairs: {e}")
         return []
 
 def get_candles(pair, timeframe='1h'):
-
-    tf_map = {
-        '1m': '1m',
-        '5m': '5m',
-        '15m': '15m',
-        '1h': '1h',
-        '4h': '4h',
-        '1d': '1d'
-    }
-
-    tf = tf_map.get(timeframe, '1h')
-
+    """
+    Mengambil data candlestick dari Indodax
+    timeframe: 1m,5m,15m,1h,4h,1d
+    """
+    # Konversi timeframe ke resolution (menit)
+    res_map = {'1m':1, '5m':5, '15m':15, '1h':60, '4h':240, '1d':1440}
+    resolution = res_map.get(timeframe, 60)
+    
+    # Ubah pair: btc_idr -> btcidr
+    symbol = pair.replace('_', '')
+    
+    # Timestamp sekarang dan 90 hari lalu
+    to = int(time.time())
+    from_ts = to - (90 * 24 * 3600)
+    
+    url = f"https://indodax.com/tradingview/history?symbol={symbol}&resolution={resolution}&from={from_ts}&to={to}"
+    
     try:
-
-        ohlcv = exchange.fetch_ohlcv(
-            pair,
-            tf,
-            limit=200
-        )
-
-        if not ohlcv:
+        resp = requests.get(url, timeout=15)
+        data = resp.json()
+        
+        # Validasi
+        if not data.get('c') or len(data['c']) < 30:
             return None
-
-        df = pd.DataFrame(
-            ohlcv,
-            columns=[
-                'timestamp',
-                'open',
-                'high',
-                'low',
-                'close',
-                'volume'
-            ]
-        )
-
-        df['timestamp'] = pd.to_datetime(
-            df['timestamp'],
-            unit='ms'
-        )
-
-        numeric_cols = [
-            'open',
-            'high',
-            'low',
-            'close',
-            'volume'
-        ]
-
-        df[numeric_cols] = (
-            df[numeric_cols]
-            .astype(float)
-        )
-
+        
+        df = pd.DataFrame({
+            'open': data['o'],
+            'high': data['h'],
+            'low': data['l'],
+            'close': data['c'],
+            'volume': data['v']
+        }).astype(float)
+        
         return df
-
-    except Exception:
+    except Exception as e:
+        # Tidak print error berulang-ulang
         return None
