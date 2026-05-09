@@ -29,11 +29,10 @@ def parse_multi_json(data_str):
     return results
 
 def get_top_volume_pairs(limit=30):
-    """Ambil pasangan dengan volume 24h tertinggi"""
     try:
         all_pairs = get_all_pairs()
         tickers = {}
-        for pair in all_pairs[:100]:  # ambil 100 dulu untuk efisiensi
+        for pair in all_pairs[:100]:
             try:
                 symbol = pair.replace('_', '')
                 url = f"https://indodax.com/api/ticker/{symbol}"
@@ -52,6 +51,7 @@ def get_top_volume_pairs(limit=30):
 
 def on_open(ws):
     print(Fore.GREEN + "[WS] Connected to Indodax WebSocket")
+    # Auth payload: hanya params.token dan id (tanpa method)
     auth_payload = {"params": {"token": Config.INDODAX_WS_TOKEN}, "id": 1}
     ws.send(json.dumps(auth_payload))
     print(Fore.CYAN + "[WS] Auth request sent")
@@ -63,6 +63,7 @@ def on_message(ws, message):
             message = message.decode('utf-8')
         parsed = parse_multi_json(message)
         for data in parsed:
+            # Auth success
             if isinstance(data, dict) and "result" in data:
                 result = data["result"]
                 if isinstance(result, dict):
@@ -71,6 +72,7 @@ def on_message(ws, message):
                         print(Fore.GREEN + f"[WS] Authenticated! Client ID: {client_id}")
                         subscribe_top_pairs(ws)
                         continue
+            # Trade stream (format sesuai dokumentasi)
             if isinstance(data, dict) and "result" in data:
                 result = data["result"]
                 if isinstance(result, dict) and "channel" in result and "trade-activity" in result["channel"]:
@@ -79,7 +81,7 @@ def on_message(ws, message):
                         try:
                             raw_pair = trade[0]
                             price = float(trade[4])
-                            amount = float(trade[6])
+                            amount = float(trade[6])  # coin amount
                             pair = raw_pair
                             if pair.endswith("idr"):
                                 pair = pair[:-3] + "_idr"
@@ -96,21 +98,18 @@ def on_message(ws, message):
 def subscribe_top_pairs(ws):
     try:
         print(Fore.YELLOW + "[WS] Getting top volume pairs...")
-        pairs = get_top_volume_pairs(limit=30)  # 👈 hanya 30 pasangan teratas
-        subscribed = 0
-        for pair in pairs:
-            try:
-                symbol = pair.replace("_", "")
-                channel = f"market:trade-activity-{symbol}"
-                payload = {"method": 1, "params": {"channel": channel}, "id": int(time.time() * 1000)}
-                ws.send(json.dumps(payload))
-                subscribed += 1
-                if subscribed % 10 == 0:
-                    print(Fore.CYAN + f"[WS] Subscribed {subscribed}/{len(pairs)}")
-                time.sleep(0.05)
-            except:
-                pass
-        print(Fore.GREEN + f"[WS] Total subscribed (top volume): {subscribed}")
+        pairs = get_top_volume_pairs(limit=30)
+        if not pairs:
+            pairs = get_all_pairs()[:30]
+        # Subscribe dengan format "channels" (array) yang benar
+        channels = [f"market:trade-activity-{p.replace('_', '')}" for p in pairs]
+        payload = {
+            "method": 1,
+            "params": {"channels": channels},   # ← PERBAIKAN: gunakan array channels
+            "id": int(time.time() * 1000)
+        }
+        ws.send(json.dumps(payload))
+        print(Fore.GREEN + f"[WS] Subscribed to {len(channels)} channels")
     except Exception as e:
         print(Fore.RED + f"[WS SUB ERROR] {e}")
 
