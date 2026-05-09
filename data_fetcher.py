@@ -31,16 +31,60 @@ def get_all_pairs():
         return []
 
 def get_candles(pair, timeframe='1h'):
-    tf_map = {'1m':'1m','5m':'5m','15m':'15m','1h':'1h','4h':'4h','1d':'1d'}
+
+    tf_map = {
+        '1m': '1m',
+        '5m': '5m',
+        '15m': '15m',
+        '1h': '1h',
+        '4h': '4h',
+        '1d': '1d'
+    }
+
     tf = tf_map.get(timeframe, '1h')
+
     try:
-        ohlcv = exchange.fetch_ohlcv(pair, tf, limit=200)
+
+        ohlcv = exchange.fetch_ohlcv(
+            pair,
+            tf,
+            limit=200
+        )
+
         if not ohlcv:
             return None
-        df = pd.DataFrame(ohlcv, columns=['timestamp','open','high','low','close','volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        df = df.astype(float)
+
+        df = pd.DataFrame(
+            ohlcv,
+            columns=[
+                'timestamp',
+                'open',
+                'high',
+                'low',
+                'close',
+                'volume'
+            ]
+        )
+
+        df['timestamp'] = pd.to_datetime(
+            df['timestamp'],
+            unit='ms'
+        )
+
+        numeric_cols = [
+            'open',
+            'high',
+            'low',
+            'close',
+            'volume'
+        ]
+
+        df[numeric_cols] = (
+            df[numeric_cols]
+            .astype(float)
+        )
+
         return df
-    except Exception as e:
-        # Jangan print error setiap kali (bisa spam)
+
+    except Exception:
         return None
