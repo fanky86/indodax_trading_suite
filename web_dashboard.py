@@ -249,7 +249,7 @@ html_template = """
         <div class="table-wrapper">
             <table id="signalsTable">
                 <thead>
-                    <tr><th>Pair</th><th>Price</th><th>Signal (1h)</th><th>RSI</th><th>Last Update</th></tr>
+                    <tr><th>No</th><th>Pair</th><th>Price</th><th>Signal (1h)</th><th>RSI</th><th>Last Update</th></tr>
                 </thead>
                 <tbody><tr><td colspan="5" style="text-align:center;">Waiting for data...</tbody>
             </table>
@@ -302,7 +302,7 @@ html_template = """
         let allPairs = pairs.slice().sort();
         let tbody = document.querySelector('#signalsTable tbody');
         tbody.innerHTML = '';
-        for (let pair of allPairs) {
+        for (let [index, pair] of allPairs.entries()) {
             let item = data[pair];
             let signalText = item.signal || 'HOLD';
             let signalClass = '';
@@ -314,6 +314,7 @@ html_template = """
             let priceFormatted = new Intl.NumberFormat('id-ID').format(item.price);
             let rsiVal = (item.rsi && item.rsi !== 0) ? item.rsi : '—';
             tbody.innerHTML += `<tr>
+                <td style="color:#7dd3fc;">${index + 1}</td>
                 <td style="font-weight:500;">${pair}</td>
                 <td class="price-value">${priceFormatted}</td>
                 <td><span class="signal-badge ${signalClass}">${signalText}</span></td>
@@ -321,7 +322,7 @@ html_template = """
                 <td class="time-col">${item.time || '--:--:--'}</td>
             </tr>`;
         }
-        if (!allPairs.length) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">⏳ Waiting...</td></tr>';
+        if (!allPairs.length) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">⏳ Waiting...</td></tr>';
     });
 
     socket.on('connect', () => {
