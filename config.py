@@ -38,5 +38,5 @@ class Config:
     
     # ---------- LSTM ----------
     USE_LSTM = True                   # Akan fallback jika tensorflow tidak ada
-    LSTM_MODEL_PATH = "lstm_model.h5"
+    LSTM_MODEL_PATH = "lstm_model.keras"
     LSTM_LOOKBACK = 60
