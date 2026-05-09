@@ -95,10 +95,9 @@ if __name__ == '__main__':
     
     # Start WebSocket realtime (jika gagal, tidak menghentikan program)
     try:
-        # WebSocket sementara dinonaktifkan
-        # ws_thread = threading.Thread(target=start_websocket_thread, daemon=True)
-        # ws_thread.start()
-        print(Fore.YELLOW + "[INFO] WebSocket dinonaktifkan, gunakan scanner periodik saja")
+        ws_thread = threading.Thread(target=start_websocket_thread, daemon=True)
+        ws_thread.start()
+        print(Fore.GREEN + "[INFO] WebSocket realtime aktif")
     except Exception as e:
         print(Fore.RED + f"Tidak bisa start WebSocket: {e}")
     
