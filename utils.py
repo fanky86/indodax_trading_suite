@@ -66,3 +66,62 @@ def log_to_csv(data: dict, filename: str = "trading_log.csv"):
         if not file_exists:
             writer.writeheader()
         writer.writerow(data)
+
+def cancel_order(
+    pair: str,
+    order_id: str,
+    side: str
+):
+
+    """
+    Cancel open order
+    """
+
+    try:
+
+        params = {
+
+            "pair": pair,
+
+            "order_id": order_id,
+
+            "type": side
+        }
+
+        result = indodax_signed_request(
+            "cancelOrder",
+            params
+        )
+
+        return result
+
+    except Exception as e:
+
+        print(
+            f"Cancel order error: {e}"
+        )
+
+        return None
+
+def get_open_orders(pair: str):
+
+    try:
+
+        params = {
+            "pair": pair
+        }
+
+        result = indodax_signed_request(
+            "openOrders",
+            params
+        )
+
+        return result
+
+    except Exception as e:
+
+        print(
+            f"Open orders error: {e}"
+        )
+
+        return None
