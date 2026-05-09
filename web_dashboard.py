@@ -15,8 +15,7 @@ html_template = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <meta http-equiv="refresh" content="5">   <!-- 🔄 auto refresh setiap 5 detik -->
-    <title>Indodax AI Trading Suite | Professional Dashboard</title>
+    <title>Indodax AI Trading Suite | Realtime Dashboard</title>
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -35,22 +34,11 @@ html_template = """
             min-height: 100vh;
         }
 
-        ::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1e1f2c;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #2dd4bf;
-            border-radius: 4px;
-        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #1e1f2c; }
+        ::-webkit-scrollbar-thumb { background: #2dd4bf; border-radius: 4px; }
 
-        .dashboard-container {
-            max-width: 1600px;
-            margin: 0 auto;
-        }
+        .dashboard-container { max-width: 1600px; margin: 0 auto; }
 
         .header {
             display: flex;
@@ -136,9 +124,7 @@ html_template = """
             align-items: center;
             gap: 8px;
         }
-        .icon {
-            color: #2dd4bf;
-        }
+        .icon { color: #2dd4bf; }
 
         .chart-container {
             position: relative;
@@ -180,9 +166,7 @@ html_template = """
             padding: 0.6rem 0.6rem;
             border-bottom: 1px solid rgba(45, 55, 80, 0.5);
         }
-        tr:hover td {
-            background: rgba(45, 212, 191, 0.05);
-        }
+        tr:hover td { background: rgba(45, 212, 191, 0.05); }
         .signal-badge {
             display: inline-block;
             padding: 3px 10px;
@@ -212,6 +196,16 @@ html_template = """
             justify-content: center;
             gap: 0.8rem;
         }
+        .update-timer {
+            position: fixed;
+            bottom: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.5);
+            font-size: 0.5rem;
+            padding: 2px 5px;
+            border-radius: 10px;
+            color: #aaa;
+        }
     </style>
 </head>
 <body>
@@ -239,8 +233,8 @@ html_template = """
 
     <div class="card">
         <div class="card-header">
-            <h3><i class="fas fa-chart-scatter icon"></i> Price Index (Top 20)</h3>
-            <div style="font-size:0.65rem;"><i class="fas fa-sync-alt"></i> real-time</div>
+            <h3><i class="fas fa-chart-scatter icon"></i> Price Index (Top 20 realtime)</h3>
+            <div style="font-size:0.65rem;"><i class="fas fa-sync-alt"></i> live via WebSocket</div>
         </div>
         <div class="chart-container">
             <canvas id="priceChart"></canvas>
@@ -249,15 +243,15 @@ html_template = """
 
     <div class="card">
         <div class="card-header">
-            <h3><i class="fas fa-bolt icon"></i> Multi‑Timeframe Signals</h3>
-            <div style="font-size:0.65rem;"><i class="fas fa-robot"></i> AI scoring</div>
+            <h3><i class="fas fa-bolt icon"></i> Multi‑Timeframe Signals (Live)</h3>
+            <div style="font-size:0.65rem;"><i class="fas fa-robot"></i> AI scoring & realtime update</div>
         </div>
         <div class="table-wrapper">
             <table id="signalsTable">
                 <thead>
-                    <tr><th>Pair</th><th>Price</th><th>Signal (1h)</th><th>RSI</th><th>Time</th></tr>
+                    <tr><th>Pair</th><th>Price</th><th>Signal (1h)</th><th>RSI</th><th>Last Update</th></tr>
                 </thead>
-                <tbody><tr><td colspan="5" style="text-align:center;">Waiting for data......</tbody>
+                <tbody><tr><td colspan="5" style="text-align:center;">Waiting for data...</tbody>
             </table>
         </div>
     </div>
@@ -266,33 +260,49 @@ html_template = """
         <span>🐋 Whale >5000 USDT</span>
         <span>📡 WS + scanner 60s</span>
     </div>
+    <div class="update-timer" id="updateTimer">Waiting for update...</div>
 </div>
 
 <script>
     const ctx = document.getElementById('priceChart').getContext('2d');
     let priceChart = new Chart(ctx, {
         type: 'line',
-        data: { labels: [], datasets: [{ label: 'Price', data: [], borderColor: '#2dd4bf', backgroundColor: 'rgba(45,212,191,0.05)', borderWidth: 2, pointRadius: 1.5, tension: 0.2, fill: true }] },
+        data: { labels: [], datasets: [{ label: 'Price (realtime)', data: [], borderColor: '#2dd4bf', backgroundColor: 'rgba(45,212,191,0.05)', borderWidth: 2, pointRadius: 1.5, tension: 0.2, fill: true }] },
         options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#cbd5e6', font: { size: 10 } } } }, scales: { y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } }, x: { ticks: { color: '#94a3b8', maxRotation: 25 } } } }
     });
 
     const socket = io();
+    let lastUpdateTime = Date.now();
+
     function updateStats(markets, signalCount) {
         document.getElementById('totalMarkets').innerText = markets;
         document.getElementById('activeSignals').innerText = signalCount;
     }
 
+    function refreshTimer() {
+        let now = Date.now();
+        let diff = Math.floor((now - lastUpdateTime) / 1000);
+        document.getElementById('updateTimer').innerHTML = `Last update: ${diff}s ago`;
+    }
+
     socket.on('update', function(data) {
+        lastUpdateTime = Date.now();
+        refreshTimer();
+
         let pairs = Object.keys(data);
         updateStats(pairs.length, pairs.filter(p => data[p].signal && (data[p].signal.includes('BUY') || data[p].signal.includes('SELL'))).length);
-        let sorted = pairs.slice().sort().slice(-20);
+        
+        // Tampilkan semua pair di chart (top 20 berdasarkan harga tertinggi agar terlihat variasi)
+        let sorted = pairs.slice().sort((a,b) => (data[b].price || 0) - (data[a].price || 0)).slice(0,20);
         priceChart.data.labels = sorted;
         priceChart.data.datasets[0].data = sorted.map(p => data[p].price);
         priceChart.update();
 
+        // Tampilkan semua pair di tabel (urut abjad)
+        let allPairs = pairs.slice().sort();
         let tbody = document.querySelector('#signalsTable tbody');
         tbody.innerHTML = '';
-        for (let pair of sorted) {
+        for (let pair of allPairs) {
             let item = data[pair];
             let signalText = item.signal || 'HOLD';
             let signalClass = '';
@@ -311,11 +321,20 @@ html_template = """
                 <td class="time-col">${item.time || '--:--:--'}</td>
             </tr>`;
         }
-        if (!sorted.length) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">⏳ Waiting......</tbody>';
+        if (!allPairs.length) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">⏳ Waiting...</td></tr>';
     });
 
-    socket.on('connect', () => document.getElementById('wsStatus').innerHTML = '<i class="fas fa-circle" style="color:#10b981; font-size:0.6rem;"></i> Live');
-    socket.on('disconnect', () => document.getElementById('wsStatus').innerHTML = '<i class="fas fa-circle" style="color:#f97316;"></i> Reconnect');
+    socket.on('connect', () => {
+        document.getElementById('wsStatus').innerHTML = '<i class="fas fa-circle" style="color:#10b981; font-size:0.6rem;"></i> Live';
+        lastUpdateTime = Date.now();
+        refreshTimer();
+    });
+    socket.on('disconnect', () => {
+        document.getElementById('wsStatus').innerHTML = '<i class="fas fa-circle" style="color:#f97316;"></i> Reconnect';
+    });
+
+    // Timer update display (setiap detik)
+    setInterval(refreshTimer, 1000);
 
     fetch('/api/trading_mode').then(res => res.json()).then(data => document.getElementById('tradeMode').innerText = data.mode === true ? 'REAL ORDER' : 'SIMULATION').catch(()=>{});
 </script>
