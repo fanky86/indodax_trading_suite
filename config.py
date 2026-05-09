@@ -8,7 +8,7 @@ class Config:
     INDODAX_BASE_URL = "https://indodax.com/api"
 
     # config.py (tambahkan di bagian CONFIG)
-    INDODAX_WS_TOKEN = "ISI_TOKEN_STATIC_ANDA"   # Ganti dengan token asli
+    INDODAX_WS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE5NDY2MTg0MTV9.UR1lBM6Eqh0yWz-PVirw1uPCxe60FdchR8eNVdsskeo"   # Ganti dengan token asli
 
     # ---------- TRADING SETTINGS ----------
     ALLOW_REAL_ORDER = True          # Set True jika API key sudah benar & siap trading
