@@ -8,7 +8,7 @@ class Config:
     INDODAX_BASE_URL = "https://indodax.com/api"
     
     # ---------- TRADING SETTINGS ----------
-    ALLOW_REAL_ORDER = True          # Set True jika API key sudah benar & siap trading
+    ALLOW_REAL_ORDER = False          # Set True jika API key sudah benar & siap trading
     MAX_POSITION_SIZE_USDT = 20.0     # Maksimal order per posisi (dalam USDT)
     SCALPING_MODE = True
     TRAILING_STOP_PCT = 1.5           # Trailing stop 1.5%
