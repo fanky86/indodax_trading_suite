@@ -1,7 +1,5 @@
-# data_fetcher.py
 import ccxt
 import pandas as pd
-import time
 
 exchange = ccxt.indodax({
     'enableRateLimit': True,
@@ -12,6 +10,7 @@ def get_all_pairs():
     try:
         markets = exchange.load_markets()
         pairs = [symbol for symbol in markets if '_idr' in symbol or '_usdt' in symbol]
+        print(f"[DEBUG] Dapat {len(pairs)} pairs")
         return pairs
     except Exception as e:
         print(f"Error get pairs: {e}")
