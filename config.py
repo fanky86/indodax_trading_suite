@@ -3,8 +3,8 @@ import os
 
 class Config:
     # ---------- INDODAX API (isi dengan milik Anda) ----------
-    INDODAX_API_KEY = os.getenv("INDODAX_API_KEY", "ISI_API_KEY_ANDA")
-    INDODAX_SECRET_KEY = os.getenv("INDODAX_SECRET_KEY", "ISI_SECRET_KEY_ANDA")
+    INDODAX_API_KEY = os.getenv("INDODAX_API_KEY", "PIUNZQLD-YQJWUP2Y-ONXQKXAZ-RGO05AIX-XBRQNS8N")
+    INDODAX_SECRET_KEY = os.getenv("INDODAX_SECRET_KEY", "82822911b3c91daebc2486abab12936576e42320764c7ac4f37289bf50ecd71f78137dab1cc76fc3")
     INDODAX_BASE_URL = "https://indodax.com/api"
     
     # ---------- TRADING SETTINGS ----------
