@@ -6,8 +6,8 @@ import time
 
 class TradingEngine:
     def __init__(self):
-        self.open_positions = {}  # pair -> dict
-    
+        self.open_positions = {}
+
     def open_position(self, pair: str, side: str, entry_price: float, amount: float):
         if not Config.ALLOW_REAL_ORDER:
             print(Fore.CYAN + f"[SIM] OPEN {side.upper()} {pair} {amount:.6f} @ {entry_price}")
@@ -19,7 +19,7 @@ class TradingEngine:
             send_telegram(f"✅ OPEN {side.upper()} {pair} @ {entry_price} | amount {amount:.6f}")
         else:
             print(Fore.RED + f"Order failed: {resp}")
-    
+
     def _add_position(self, pair, side, entry, amount):
         self.open_positions[pair] = {
             'side': side,
@@ -29,7 +29,7 @@ class TradingEngine:
             'trailing_stop_pct': Config.TRAILING_STOP_PCT,
             'open_time': time.time()
         }
-    
+
     def close_position(self, pair: str, current_price: float, reason: str = ""):
         if pair not in self.open_positions:
             return
@@ -40,7 +40,6 @@ class TradingEngine:
             send_telegram(f"🔒 CLOSE {pair} @ {current_price} ({reason})")
         else:
             print(Fore.YELLOW + f"[SIM] CLOSE {pair} @ {current_price} ({reason})")
-        # Logging
         log_to_csv({
             'pair': pair,
             'side': pos['side'],
@@ -50,7 +49,7 @@ class TradingEngine:
             'reason': reason,
             'time': time.time()
         })
-    
+
     def update_trailing_stop(self, pair: str, current_price: float):
         if pair not in self.open_positions:
             return
@@ -60,9 +59,8 @@ class TradingEngine:
         stop_price = pos['highest'] * (1 - pos['trailing_stop_pct'] / 100)
         if current_price <= stop_price:
             self.close_position(pair, current_price, "TRAILING STOP")
-    
+
     def check_scalping_signal(self, signals_dict):
-        """Return action jika sinyal scalping dari timeframe 1m"""
         if not Config.SCALPING_MODE:
             return None
         tf1m = signals_dict.get('1m', {})
