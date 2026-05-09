@@ -8,7 +8,7 @@ class Config:
     INDODAX_BASE_URL = "https://indodax.com/api"
     
     # ---------- TRADING SETTINGS ----------
-    ALLOW_REAL_ORDER = False          # Set True jika API key sudah benar & siap trading
+    ALLOW_REAL_ORDER = True          # Set True jika API key sudah benar & siap trading
     MAX_POSITION_SIZE_USDT = 20.0     # Maksimal order per posisi (dalam USDT)
     SCALPING_MODE = True
     TRAILING_STOP_PCT = 1.5           # Trailing stop 1.5%
@@ -23,8 +23,8 @@ class Config:
     
     # ---------- TELEGRAM ----------
     TELEGRAM_ENABLED = False
-    TELEGRAM_BOT_TOKEN = "ISI_BOT_TOKEN"
-    TELEGRAM_CHAT_ID = "ISI_CHAT_ID"
+    TELEGRAM_BOT_TOKEN = "8640703551:AAFZgiOQ0C0ct7Tuhegx9zIlegqVJIbtVWc"
+    TELEGRAM_CHAT_ID = "7211121595"
     
     # ---------- WEB DASHBOARD ----------
     DASHBOARD_PORT = 5000
