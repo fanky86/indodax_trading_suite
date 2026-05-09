@@ -33,52 +33,48 @@ def get_all_pairs():
 
 
 def get_candles(pair: str, timeframe: str = "1h") -> Optional[pd.DataFrame]:
-    """
-    timeframe: 1m,5m,15m,1h,4h,1d
-    """
 
-    resolution_map = {
+    timeframe_map = {
         "1m": "1",
         "5m": "5",
         "15m": "15",
         "1h": "60",
         "4h": "240",
-        "1d": "1D"
+        "1d": "1440"
     }
 
-    interval = resolution_map.get(timeframe, "60")
+    tf = timeframe_map.get(timeframe, "60")
 
-    # btc_idr -> BTCIDR
-    symbol = pair.replace("_", "").upper()
-
-    from_timestamp = int(time.time()) - (86400 * 30)
-    to_timestamp = int(time.time())
+    symbol = pair.lower()
 
     url = (
-        f"https://indodax.com/tradingview/history_v2"
-        f"?symbol={symbol}"
-        f"&tf={interval}"
-        f"&from={from_timestamp}"
-        f"&to={to_timestamp}"
+        f"https://indodax.com/tradingview/history?"
+        f"symbol={symbol}"
+        f"&resolution={tf}"
+        f"&from=0"
+        f"&to={int(time.time())}"
     )
 
     try:
+
         resp = requests.get(
             url,
             timeout=15,
             headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json"
+                "User-Agent": "Mozilla/5.0"
             }
         )
 
-        if resp.status_code != 200:
-            print(f"HTTP Error {resp.status_code} for {pair}")
-            return None
+        print(f"[DEBUG] {url}")
+        print(f"[DEBUG] STATUS {resp.status_code}")
+        print(f"[DEBUG] RESP {resp.text[:200]}")
 
         data = resp.json()
 
-        if "c" not in data or not data["c"]:
+        if not data:
+            return None
+
+        if "s" in data and data["s"] == "no_data":
             print(f"No candle data for {pair}")
             return None
 
@@ -101,7 +97,7 @@ def get_candles(pair: str, timeframe: str = "1h") -> Optional[pd.DataFrame]:
         print(f"Error fetching {pair} {timeframe}: {e}")
 
         try:
-            print(resp.text[:300])
+            print(resp.text[:500])
         except:
             pass
 
