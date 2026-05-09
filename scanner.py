@@ -1,6 +1,9 @@
+# =========================================
 # scanner.py
+# =========================================
 
 from data_fetcher import get_candles
+from realtime_store import get_realtime_df
 from indicators import calculate_indicators
 from smart_money import (
     detect_order_blocks,
@@ -8,22 +11,18 @@ from smart_money import (
 )
 from ai_models import ai_predictor
 from config import Config
-from realtime_store import get_realtime_df
 
 
-def scan_pair(pair: str) -> dict:
+def scan_pair(pair: str):
 
     result = {}
 
     for tf in Config.TIMEFRAMES:
 
-        # =====================================
-        # REALTIME DATA FIRST
-        # =====================================
-
+        # realtime first
         df = get_realtime_df(pair)
 
-        # fallback API candle
+        # fallback API
         if df is None:
 
             df = get_candles(
@@ -31,21 +30,15 @@ def scan_pair(pair: str) -> dict:
                 tf
             )
 
-        # skip jika data kosong
         if df is None:
 
             continue
 
-        # minimum candle
         if len(df) < 30:
 
             continue
 
         try:
-
-            # =====================================
-            # INDICATORS
-            # =====================================
 
             ind = calculate_indicators(df)
 
@@ -59,20 +52,24 @@ def scan_pair(pair: str) -> dict:
                 ai_predictor.predict_next_price(df)
             )
 
-            # =====================================
-            # SCORING
-            # =====================================
+            # =================================
+            # SCORE
+            # =================================
 
             score = 0.0
+
+            confidence = 0
 
             # RSI
             if ind['rsi'] < 30:
 
                 score += 2.5
+                confidence += 20
 
             elif ind['rsi'] < 40:
 
                 score += 1
+                confidence += 10
 
             elif ind['rsi'] > 70:
 
@@ -86,6 +83,7 @@ def scan_pair(pair: str) -> dict:
             if ind['trend'] == 'BULLISH':
 
                 score += 2
+                confidence += 20
 
             else:
 
@@ -95,6 +93,7 @@ def scan_pair(pair: str) -> dict:
             if ind['macd'] > ind['macd_signal']:
 
                 score += 1.5
+                confidence += 20
 
             else:
 
@@ -104,6 +103,7 @@ def scan_pair(pair: str) -> dict:
             if ind['vol_surge']:
 
                 score += 1
+                confidence += 10
 
             # AI prediction
             if lstm_pred:
@@ -114,6 +114,7 @@ def scan_pair(pair: str) -> dict:
                 ):
 
                     score += 2
+                    confidence += 20
 
                 elif (
                     lstm_pred <
@@ -122,9 +123,9 @@ def scan_pair(pair: str) -> dict:
 
                     score -= 2
 
-            # =====================================
+            # =================================
             # SIGNAL
-            # =====================================
+            # =================================
 
             if score >= 4:
 
@@ -146,28 +147,18 @@ def scan_pair(pair: str) -> dict:
 
                 signal = "HOLD"
 
-            # =====================================
-            # DEBUG
-            # =====================================
-
             print(
 
                 f"{pair} {tf} | "
 
                 f"RSI={ind['rsi']:.2f} | "
 
-                f"Trend={ind['trend']} | "
-
-                f"MACD={ind['macd']:.4f} | "
-
                 f"Score={score:.2f} | "
+
+                f"Confidence={confidence}% | "
 
                 f"Signal={signal}"
             )
-
-            # =====================================
-            # RESULT
-            # =====================================
 
             result[tf] = {
 
@@ -187,6 +178,8 @@ def scan_pair(pair: str) -> dict:
                     score,
                     2
                 ),
+
+                'confidence': confidence,
 
                 'signal': signal,
 
