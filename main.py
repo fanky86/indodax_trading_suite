@@ -533,6 +533,10 @@ def scanning_loop():
 # =========================================
 
 if __name__ == "__main__":
+    try:
+        os.system("git pull")
+    except:
+        pass
 
     print(
 
