@@ -1,20 +1,13 @@
-# websocket_stream.py (final)
-
+# websocket_stream.py
 import websocket
 import json
 import time
+import requests
 from colorama import Fore
 
 from config import Config
 from detectors import whale_pump_detector
 from data_fetcher import get_all_pairs
-
-# Optional realtime store (abaikan jika tidak ada)
-try:
-    from realtime_store import add_trade
-except ImportError:
-    def add_trade(pair, price, amount):
-        pass  # dummy function
 
 WS_URL = "wss://ws3.indodax.com/ws/"
 _callback = None
@@ -35,6 +28,28 @@ def parse_multi_json(data_str):
             break
     return results
 
+def get_top_volume_pairs(limit=30):
+    """Ambil pasangan dengan volume 24h tertinggi"""
+    try:
+        all_pairs = get_all_pairs()
+        tickers = {}
+        for pair in all_pairs[:100]:  # ambil 100 dulu untuk efisiensi
+            try:
+                symbol = pair.replace('_', '')
+                url = f"https://indodax.com/api/ticker/{symbol}"
+                resp = requests.get(url, timeout=5).json()
+                vol = float(resp.get('ticker', {}).get('vol_idr', 0))
+                tickers[pair] = vol
+            except:
+                tickers[pair] = 0
+        sorted_pairs = sorted(tickers.items(), key=lambda x: x[1], reverse=True)
+        top_pairs = [p[0] for p in sorted_pairs[:limit]]
+        print(Fore.GREEN + f"[WS] Top {len(top_pairs)} pairs by volume: {top_pairs[:5]}...")
+        return top_pairs
+    except Exception as e:
+        print(Fore.RED + f"[WS] Gagal get top pairs: {e}, fallback ke 30 random")
+        return get_all_pairs()[:30]
+
 def on_open(ws):
     print(Fore.GREEN + "[WS] Connected to Indodax WebSocket")
     auth_payload = {"params": {"token": Config.INDODAX_WS_TOKEN}, "id": 1}
@@ -48,43 +63,40 @@ def on_message(ws, message):
             message = message.decode('utf-8')
         parsed = parse_multi_json(message)
         for data in parsed:
-            # Auth success
             if isinstance(data, dict) and "result" in data:
                 result = data["result"]
                 if isinstance(result, dict):
                     client_id = result.get("client") or result.get("client_id")
                     if client_id:
                         print(Fore.GREEN + f"[WS] Authenticated! Client ID: {client_id}")
-                        subscribe_all_pairs(ws)
+                        subscribe_top_pairs(ws)
                         continue
-            # Trade stream (format Indodax: {"result":{"channel":"...","data":{"data":[...]}}})
             if isinstance(data, dict) and "result" in data:
                 result = data["result"]
                 if isinstance(result, dict) and "channel" in result and "trade-activity" in result["channel"]:
                     trade_list = result.get("data", {}).get("data", [])
                     for trade in trade_list:
                         try:
-                            raw_pair = trade[0]   # e.g. "btcidr"
+                            raw_pair = trade[0]
                             price = float(trade[4])
-                            amount = float(trade[6])  # coin amount
+                            amount = float(trade[6])
                             pair = raw_pair
                             if pair.endswith("idr"):
                                 pair = pair[:-3] + "_idr"
                             elif pair.endswith("usdt"):
                                 pair = pair[:-4] + "_usdt"
-                            add_trade(pair, price, amount)
                             whale_pump_detector.on_trade(pair, price, amount)
                             if _callback:
                                 _callback(pair, price, amount)
-                        except Exception:
+                        except:
                             pass
     except Exception as e:
         print(Fore.RED + f"[WS GENERAL ERROR] {e}")
 
-def subscribe_all_pairs(ws):
+def subscribe_top_pairs(ws):
     try:
-        print(Fore.YELLOW + "[WS] Loading pairs...")
-        pairs = get_all_pairs()
+        print(Fore.YELLOW + "[WS] Getting top volume pairs...")
+        pairs = get_top_volume_pairs(limit=30)  # 👈 hanya 30 pasangan teratas
         subscribed = 0
         for pair in pairs:
             try:
@@ -93,12 +105,12 @@ def subscribe_all_pairs(ws):
                 payload = {"method": 1, "params": {"channel": channel}, "id": int(time.time() * 1000)}
                 ws.send(json.dumps(payload))
                 subscribed += 1
-                if subscribed % 50 == 0:
+                if subscribed % 10 == 0:
                     print(Fore.CYAN + f"[WS] Subscribed {subscribed}/{len(pairs)}")
-                time.sleep(0.02)
-            except Exception:
+                time.sleep(0.05)
+            except:
                 pass
-        print(Fore.GREEN + f"[WS] Total subscribed: {subscribed}")
+        print(Fore.GREEN + f"[WS] Total subscribed (top volume): {subscribed}")
     except Exception as e:
         print(Fore.RED + f"[WS SUB ERROR] {e}")
 
@@ -113,5 +125,9 @@ def on_close(ws, close_status_code, close_msg):
 def start_websocket(callback=None):
     global _callback
     _callback = callback
-    ws = websocket.WebSocketApp(WS_URL, on_open=on_open, on_message=on_message, on_error=on_error, on_close=on_close)
+    ws = websocket.WebSocketApp(WS_URL,
+                                on_open=on_open,
+                                on_message=on_message,
+                                on_error=on_error,
+                                on_close=on_close)
     ws.run_forever()
