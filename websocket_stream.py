@@ -1,21 +1,25 @@
-# websocket_stream.py
 import websocket
 import json
 import threading
-import time
+import time  # <-- PERBAIKAN: import time
 from detectors import whale_pump_detector
 from colorama import Fore
 
 def on_message(ws, message):
     try:
         data = json.loads(message)
-        # Format pesan Indodax: {"pair":"btcidr","price":xxx,"volume":xxx}
+        # Indodax WebSocket mengirim {"pair":"btcidr","price":12345,"volume":0.5}
         if 'pair' in data and 'price' in data:
             pair = data['pair']
+            # Konversi ke format underscore untuk konsistensi (btcidr -> btc_idr)
+            if '_' not in pair:
+                if 'idr' in pair:
+                    pair = pair.replace('idr', '_idr')
+                elif 'usdt' in pair:
+                    pair = pair.replace('usdt', '_usdt')
             price = float(data['price'])
             volume = float(data.get('volume', 0))
             whale_pump_detector.on_trade(pair, price, volume)
-            # bisa juga kirim ke dashboard via global variable atau callback
             if hasattr(on_message, 'callback'):
                 on_message.callback(pair, price, volume)
     except Exception as e:
@@ -33,7 +37,7 @@ def start_websocket(callback=None):
     """
     callback function signature: callback(pair, price, volume)
     """
-    ws_url = "wss://ws.indodax.com/trade"   # Endpoint publik Indodax
+    ws_url = "wss://ws.indodax.com/ws"  # Endpoint WebSocket publik Indodax
     ws = websocket.WebSocketApp(ws_url,
                                 on_message=on_message,
                                 on_error=on_error,
