@@ -1,145 +1,262 @@
-# =========================================
 # scanner.py
-# =========================================
 
-from data_fetcher import get_candles
-from realtime_store import get_realtime_df
-from indicators import calculate_indicators
+from data_fetcher import (
+    get_candles
+)
+
+from indicators import (
+    calculate_indicators
+)
+
 from smart_money import (
     detect_order_blocks,
     recognize_candlestick_patterns
 )
-from ai_models import ai_predictor
+
+from ai_models import (
+    ai_predictor
+)
+
 from config import Config
 
 
-def scan_pair(pair: str):
+def scan_pair(pair):
 
     result = {}
 
+    # =========================
+    # BTC FILTER
+    # =========================
+
+    btc_df = get_candles(
+        "btc_idr",
+        "1h"
+    )
+
+    btc_bullish = True
+
+    if btc_df is not None:
+
+        btc_ind = (
+            calculate_indicators(
+                btc_df
+            )
+        )
+
+        if btc_ind["trend"] != "BULLISH":
+
+            btc_bullish = False
+
+    # =========================
+    # MAIN LOOP
+    # =========================
+
     for tf in Config.TIMEFRAMES:
 
-        # realtime first
-        df = get_realtime_df(pair)
-
-        # fallback API
-        if df is None:
+        try:
 
             df = get_candles(
                 pair,
                 tf
             )
 
-        if df is None:
+            if (
 
-            continue
+                df is None
 
-        if len(df) < 30:
+                or
 
-            continue
+                len(df) < 100
+            ):
 
-        try:
+                continue
 
-            ind = calculate_indicators(df)
+            # =====================
+            # INDICATORS
+            # =====================
+
+            ind = (
+                calculate_indicators(
+                    df
+                )
+            )
 
             patterns = (
-                recognize_candlestick_patterns(df)
+                recognize_candlestick_patterns(
+                    df
+                )
             )
 
-            smc = detect_order_blocks(df)
+            smc = (
+                detect_order_blocks(
+                    df
+                )
+            )
+
+            # =====================
+            # AI PREDICTION
+            # =====================
 
             lstm_pred = (
-                ai_predictor.predict_next_price(df)
+                ai_predictor
+                .predict_next_price(df)
             )
 
-            # =================================
-            # SCORE
-            # =================================
+            # =====================
+            # SCORE SYSTEM
+            # =====================
 
-            score = 0.0
-
-            confidence = 0
+            score = 0
 
             # RSI
-            if ind['rsi'] < 30:
 
-                score += 2.5
-                confidence += 20
+            if ind["rsi"] < 30:
 
-            elif ind['rsi'] < 40:
+                score += 3
+
+            elif ind["rsi"] < 40:
 
                 score += 1
-                confidence += 10
 
-            elif ind['rsi'] > 70:
+            elif ind["rsi"] > 70:
 
-                score -= 2.5
+                score -= 3
 
-            elif ind['rsi'] > 60:
+            elif ind["rsi"] > 60:
 
                 score -= 1
 
-            # Trend
-            if ind['trend'] == 'BULLISH':
+            # TREND
+
+            if ind["trend"] == "BULLISH":
 
                 score += 2
-                confidence += 20
 
             else:
 
                 score -= 2
 
             # MACD
-            if ind['macd'] > ind['macd_signal']:
 
-                score += 1.5
-                confidence += 20
+            if (
+
+                ind["macd"]
+
+                >
+
+                ind["macd_signal"]
+            ):
+
+                score += 2
 
             else:
 
-                score -= 1.5
+                score -= 2
 
-            # Volume surge
-            if ind['vol_surge']:
+            # VOLUME
+
+            if ind["vol_surge"]:
 
                 score += 1
-                confidence += 10
 
-            # AI prediction
+            # BTC FILTER
+
+            if btc_bullish:
+
+                score += 2
+
+            else:
+
+                score -= 2
+
+            # AI
+
             if lstm_pred:
 
+                current = (
+                    ind["last_price"]
+                )
+
                 if (
-                    lstm_pred >
-                    ind['last_price'] * 1.005
+
+                    lstm_pred
+
+                    >
+
+                    current * 1.01
                 ):
 
                     score += 2
-                    confidence += 20
 
                 elif (
-                    lstm_pred <
-                    ind['last_price'] * 0.995
+
+                    lstm_pred
+
+                    <
+
+                    current * 0.99
                 ):
 
                     score -= 2
 
-            # =================================
+            # PATTERN
+
+            bullish_patterns = [
+
+                "HAMMER",
+
+                "ENGULFING_BULL"
+            ]
+
+            bearish_patterns = [
+
+                "SHOOTING_STAR",
+
+                "ENGULFING_BEAR"
+            ]
+
+            for p in patterns:
+
+                if p in bullish_patterns:
+
+                    score += 1
+
+                elif p in bearish_patterns:
+
+                    score -= 1
+
+            # =====================
+            # CONFIDENCE
+            # =====================
+
+            confidence = min(
+
+                100,
+
+                abs(score) * 10
+            )
+
+            # =====================
             # SIGNAL
-            # =================================
+            # =====================
 
-            if score >= 4:
+            if score >= 8:
 
-                signal = "STRONG BUY"
+                signal = (
+                    "STRONG BUY"
+                )
 
-            elif score >= 1.5:
+            elif score >= 4:
 
                 signal = "BUY"
 
+            elif score <= -8:
+
+                signal = (
+                    "STRONG SELL"
+                )
+
             elif score <= -4:
-
-                signal = "STRONG SELL"
-
-            elif score <= -1.5:
 
                 signal = "SELL"
 
@@ -147,60 +264,99 @@ def scan_pair(pair: str):
 
                 signal = "HOLD"
 
+            # =====================
+            # DEBUG
+            # =====================
+
             print(
 
                 f"{pair} {tf} | "
 
-                f"RSI={ind['rsi']:.2f} | "
+                f"RSI="
+                f"{ind['rsi']:.2f} | "
 
-                f"Score={score:.2f} | "
+                f"Score="
+                f"{score:.2f} | "
 
-                f"Confidence={confidence}% | "
+                f"Confidence="
+                f"{confidence}% | "
 
-                f"Signal={signal}"
+                f"Signal="
+                f"{signal}"
             )
+
+            # =====================
+            # RESULT
+            # =====================
 
             result[tf] = {
 
-                'price': round(
-                    ind['last_price'],
+                "price":
+
+                round(
+                    ind["last_price"],
                     4
                 ),
 
-                'rsi': round(
-                    ind['rsi'],
+                "rsi":
+
+                round(
+                    ind["rsi"],
                     2
                 ),
 
-                'trend': ind['trend'],
+                "trend":
 
-                'score': round(
+                ind["trend"],
+
+                "score":
+
+                round(
                     score,
                     2
                 ),
 
-                'confidence': confidence,
+                "confidence":
 
-                'signal': signal,
+                confidence,
 
-                'patterns': patterns,
+                "signal":
 
-                'support': smc['support'],
+                signal,
 
-                'resistance': smc['resistance'],
+                "patterns":
 
-                'lstm_pred': (
-                    round(lstm_pred, 4)
-                    if lstm_pred
-                    else None
+                patterns,
+
+                "support":
+
+                smc["support"],
+
+                "resistance":
+
+                smc["resistance"],
+
+                "lstm_pred":
+
+                round(
+                    lstm_pred,
+                    4
                 )
+
+                if lstm_pred
+
+                else None
             }
 
         except Exception as e:
 
             print(
+
                 f"[SCAN ERROR] "
-                f"{pair} {tf}: {e}"
+
+                f"{pair} "
+
+                f"{tf}: {e}"
             )
 
     return result
