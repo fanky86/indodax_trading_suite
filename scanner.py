@@ -5,18 +5,21 @@ from indicators import calculate_indicators
 from smart_money import detect_order_blocks, recognize_candlestick_patterns
 from ai_models import ai_predictor
 from config import Config
-
+from realtime_store import get_realtime_df
 
 def scan_pair(pair: str) -> dict:
 
     result = {}
 
     for tf in Config.TIMEFRAMES:
-
-        df = get_candles(pair, tf)
-
-        if df is None or len(df) < 50:
-            continue
+        # realtime websocket data dulu
+        df = get_realtime_df(pair)
+        # fallback API candle
+    if df is None:
+        df = get_candles(
+            pair,
+            tf
+        )
 
         ind = calculate_indicators(df)
 
