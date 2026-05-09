@@ -2,6 +2,7 @@
 import websocket
 import json
 import threading
+import time
 from detectors import whale_pump_detector
 from colorama import Fore
 
