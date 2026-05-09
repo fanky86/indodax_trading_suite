@@ -1,54 +1,227 @@
 # data_fetcher.py
-import requests
+
+import ccxt
 import pandas as pd
 import time
+from colorama import Fore
+
+
+# =========================================
+# INIT EXCHANGE
+# =========================================
+
+exchange = ccxt.indodax({
+
+    "enableRateLimit": True,
+
+    "rateLimit": 1500,
+
+    "timeout": 20000,
+
+    "options": {
+        "defaultType": "spot"
+    }
+})
+
+
+# =========================================
+# GET ALL PAIRS
+# =========================================
 
 def get_all_pairs():
-    """Ambil semua pasangan IDR dan USDT dari Indodax"""
+
     try:
-        data = requests.get("https://indodax.com/api/pairs", timeout=10).json()
-        pairs = [p['ticker_id'] for p in data if '_idr' in p['ticker_id'] or '_usdt' in p['ticker_id']]
-        print(f"[✓] Mendapatkan {len(pairs)} pasangan")
+
+        markets = exchange.load_markets()
+
+        pairs = []
+
+        for symbol in markets.keys():
+
+            s = symbol.lower()
+
+            if (
+                "/idr" in s
+                or
+                "/usdt" in s
+            ):
+
+                # BTC/IDR -> btc_idr
+                formatted = (
+                    s.replace("/", "_")
+                )
+
+                pairs.append(formatted)
+
+        print(
+            Fore.GREEN +
+            f"[✓] Mendapatkan "
+            f"{len(pairs)} pasangan via CCXT"
+        )
+
         return pairs
+
     except Exception as e:
-        print(f"[!] Gagal ambil pairs: {e}")
+
+        print(
+            Fore.RED +
+            f"[PAIR ERROR] {e}"
+        )
+
         return []
 
-def get_candles(pair, timeframe='1h'):
-    """
-    Mengambil data candlestick dari Indodax via endpoint publik
-    timeframe: 1m,5m,15m,1h,4h,1d
-    """
-    # Konversi timeframe ke resolution (menit)
-    res_map = {'1m':1, '5m':5, '15m':15, '1h':60, '4h':240, '1d':1440}
-    resolution = res_map.get(timeframe, 60)
-    
-    # Ubah format pair: btc_idr -> btcidr (hilangkan underscore)
-    symbol = pair.replace('_', '')
-    
-    # Timestamp sekarang dan 90 hari lalu
-    to = int(time.time())
-    from_ts = to - (90 * 24 * 3600)
-    
-    url = f"https://indodax.com/tradingview/history?symbol={symbol}&resolution={resolution}&from={from_ts}&to={to}"
-    
+
+# =========================================
+# GET CANDLES
+# =========================================
+
+def get_candles(
+    pair,
+    timeframe='1h',
+    limit=200
+):
+
     try:
-        resp = requests.get(url, timeout=15)
-        data = resp.json()
-        
-        # Validasi apakah data candlestick ada
-        if not data.get('c') or len(data['c']) < 30:
+
+        # btc_idr -> BTC/IDR
+        symbol = (
+            pair
+            .replace("_", "/")
+            .upper()
+        )
+
+        ohlcv = exchange.fetch_ohlcv(
+            symbol=symbol,
+            timeframe=timeframe,
+            limit=limit
+        )
+
+        if (
+            not ohlcv
+            or
+            len(ohlcv) < 30
+        ):
+
             return None
-        
-        df = pd.DataFrame({
-            'open': data['o'],
-            'high': data['h'],
-            'low': data['l'],
-            'close': data['c'],
-            'volume': data['v']
-        }).astype(float)
-        
+
+        df = pd.DataFrame(
+
+            ohlcv,
+
+            columns=[
+
+                'timestamp',
+
+                'open',
+
+                'high',
+
+                'low',
+
+                'close',
+
+                'volume'
+            ]
+        )
+
+        # timestamp
+        df['timestamp'] = pd.to_datetime(
+            df['timestamp'],
+            unit='ms'
+        )
+
+        # numeric
+        numeric_cols = [
+
+            'open',
+
+            'high',
+
+            'low',
+
+            'close',
+
+            'volume'
+        ]
+
+        df[numeric_cols] = (
+            df[numeric_cols]
+            .astype(float)
+        )
+
+        # cleanup
+        df = (
+            df
+            .dropna()
+            .reset_index(drop=True)
+        )
+
         return df
-    except Exception as e:
-        # Error tidak perlu print berulang-ulang (cukup sekali)
+
+    except Exception:
+
         return None
+
+
+# =========================================
+# GET TICKER
+# =========================================
+
+def get_ticker(pair):
+
+    try:
+
+        symbol = (
+            pair
+            .replace("_", "/")
+            .upper()
+        )
+
+        ticker = exchange.fetch_ticker(
+            symbol
+        )
+
+        return {
+
+            "last": ticker.get("last"),
+
+            "bid": ticker.get("bid"),
+
+            "ask": ticker.get("ask"),
+
+            "volume": ticker.get("baseVolume")
+        }
+
+    except Exception:
+
+        return None
+
+
+# =========================================
+# TEST
+# =========================================
+
+if __name__ == "__main__":
+
+    print("\n=== LOAD PAIRS ===\n")
+
+    pairs = get_all_pairs()
+
+    print(
+        pairs[:10]
+    )
+
+    print("\n=== BTC CANDLE ===\n")
+
+    df = get_candles(
+        "btc_idr",
+        "1h"
+    )
+
+    print(df.tail())
+
+    print("\n=== TICKER ===\n")
+
+    print(
+        get_ticker("btc_idr")
+    )
