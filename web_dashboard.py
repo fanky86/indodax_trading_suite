@@ -15,6 +15,7 @@ html_template = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta http-equiv="refresh" content="5">   <!-- 🔄 auto refresh setiap 5 detik -->
     <title>Indodax AI Trading Suite | Professional Dashboard</title>
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
