@@ -5,10 +5,10 @@ import json
 import time
 from colorama import Fore
 
-from realtime_store import add_trade
+from config import Config
 from detectors import whale_pump_detector
 from data_fetcher import get_all_pairs
-from config import Config
+from realtime_store import add_trade
 
 
 # =========================================
@@ -17,9 +17,69 @@ from config import Config
 
 WS_URL = "wss://ws3.indodax.com/ws/"
 
-STATIC_TOKEN = Config.INDODAX_WS_TOKEN
-
 _callback = None
+
+
+# =========================================
+# MULTI JSON PARSER
+# =========================================
+
+def parse_multi_json(data_str):
+
+    """
+    Parse multiple JSON objects
+    from websocket packet
+    """
+
+    results = []
+
+    decoder = json.JSONDecoder()
+
+    idx = 0
+
+    data_str = data_str.strip()
+
+    while idx < len(data_str):
+
+        try:
+
+            obj, end = decoder.raw_decode(
+                data_str,
+                idx
+            )
+
+            results.append(obj)
+
+            idx = end
+
+            # skip whitespace
+            while (
+
+                idx < len(data_str)
+
+                and
+
+                data_str[idx] in
+
+                ' \n\r\t'
+            ):
+
+                idx += 1
+
+        except json.JSONDecodeError as e:
+
+            print(
+
+                Fore.RED +
+
+                f"[WS PARSE ERROR] "
+
+                f"{e}"
+            )
+
+            break
+
+    return results
 
 
 # =========================================
@@ -29,26 +89,34 @@ _callback = None
 def on_open(ws):
 
     print(
+
         Fore.GREEN +
-        "[WS] Connected to Indodax"
+
+        "[WS] Connected to "
+        "Indodax WebSocket"
     )
 
-    # AUTH
-    auth_msg = {
+    auth_payload = {
+
+        "id": 1,
+
+        "method": "public/auth",
 
         "params": {
-            "token": STATIC_TOKEN
-        },
 
-        "id": 1
+            "token":
+            Config.INDODAX_WS_TOKEN
+        }
     }
 
     ws.send(
-        json.dumps(auth_msg)
+        json.dumps(auth_payload)
     )
 
     print(
+
         Fore.CYAN +
+
         "[WS] Auth request sent"
     )
 
@@ -63,150 +131,182 @@ def on_message(ws, message):
 
     try:
 
-        data = json.loads(message)
+        # bytes -> string
+        if isinstance(message, bytes):
 
-        # DEBUG
-        # print(data)
+            message = message.decode(
+                "utf-8"
+            )
 
-        # =====================================
-        # AUTH SUCCESS
-        # =====================================
+        # parse multi json
+        parsed_objects = (
+            parse_multi_json(message)
+        )
 
-        if (
-            "result" in data
-            and
-            isinstance(data["result"], dict)
-        ):
+        for data in parsed_objects:
 
-            result = data["result"]
-
-            if "client" in result:
-
-                print(
-                    Fore.GREEN +
-                    f"[WS] Authenticated! "
-                    f"Client ID: "
-                    f"{result['client']}"
-                )
-
-                subscribe_all_pairs(ws)
-
-                return
-
-        # =====================================
-        # TRADE STREAM
-        # =====================================
-
-        if (
-            "result" in data
-            and
-            isinstance(data["result"], dict)
-        ):
-
-            result = data["result"]
+            # =================================
+            # AUTH SUCCESS
+            # =================================
 
             if (
-                "channel" in result
+                isinstance(data, dict)
                 and
-                "data" in result
+                data.get("result")
             ):
 
-                channel = result["channel"]
+                result = data["result"]
 
-                # market:trade-activity-btcidr
-                if channel.startswith(
-                    "market:trade-activity-"
-                ):
+                if isinstance(result, dict):
 
-                    raw_data = (
-                        result["data"]
-                        .get("data", [])
+                    client_id = (
+
+                        result.get(
+                            "client_id"
+                        )
+
+                        or
+
+                        result.get(
+                            "client"
+                        )
                     )
 
-                    for trade in raw_data:
+                    if client_id:
 
-                        try:
+                        print(
 
-                            # FORMAT:
-                            # [pair, timestamp, seq, side, price, idr_volume, coin_volume]
+                            Fore.GREEN +
 
-                            pair_raw = trade[0]
+                            f"[WS] Authenticated! "
 
-                            price = float(
-                                trade[4]
-                            )
+                            f"Client ID: "
 
-                            # pakai coin volume
-                            coin_volume = float(
-                                trade[6]
-                            )
+                            f"{client_id}"
+                        )
 
-                            # btcidr -> btc_idr
-                            pair = pair_raw
+                        subscribe_all_pairs(ws)
 
-                            if (
-                                "_"
-                                not in pair
-                            ):
+                        continue
 
-                                if pair.endswith(
-                                    "idr"
-                                ):
+            # =================================
+            # TRADE DATA
+            # =================================
 
-                                    pair = (
-                                        pair[:-3]
-                                        + "_idr"
-                                    )
+            if (
+                isinstance(data, dict)
+                and
+                "params" in data
+            ):
 
-                                elif pair.endswith(
-                                    "usdt"
-                                ):
+                params = data["params"]
 
-                                    pair = (
-                                        pair[:-4]
-                                        + "_usdt"
-                                    )
+                channel = params.get(
+                    "channel",
+                    ""
+                )
 
-                            # =================================
-                            # REALTIME STORE
-                            # =================================
+                trade_data = params.get(
+                    "data",
+                    {}
+                )
 
-                            add_trade(
-                                pair,
-                                price,
-                                coin_volume
-                            )
+                if (
+                    "trade-activity"
+                    in
+                    channel
 
-                            # =================================
-                            # WHALE DETECTOR
-                            # =================================
+                    and
 
-                            whale_pump_detector.on_trade(
-                                pair,
-                                price,
-                                coin_volume
-                            )
+                    trade_data
+                ):
 
-                            # =================================
-                            # CALLBACK
-                            # =================================
+                    raw_pair = (
+                        channel
+                        .split("-")[-1]
+                    )
 
-                            if _callback:
+                    # btcidr -> btc_idr
+                    pair = raw_pair
 
-                                _callback(
-                                    pair,
-                                    price,
-                                    coin_volume
-                                )
+                    if pair.endswith("idr"):
 
-                        except Exception:
-                            pass
+                        pair = (
+                            pair[:-3]
+                            + "_idr"
+                        )
+
+                    elif pair.endswith("usdt"):
+
+                        pair = (
+                            pair[:-4]
+                            + "_usdt"
+                        )
+
+                    price = float(
+
+                        trade_data.get(
+                            "price",
+                            0
+                        )
+                    )
+
+                    amount = float(
+
+                        trade_data.get(
+                            "amount",
+                            0
+                        )
+                    )
+
+                    # =================================
+                    # REALTIME CACHE
+                    # =================================
+
+                    add_trade(
+
+                        pair,
+
+                        price,
+
+                        amount
+                    )
+
+                    # =================================
+                    # WHALE DETECTOR
+                    # =================================
+
+                    whale_pump_detector.on_trade(
+
+                        pair,
+
+                        price,
+
+                        amount
+                    )
+
+                    # =================================
+                    # CALLBACK
+                    # =================================
+
+                    if _callback:
+
+                        _callback(
+
+                            pair,
+
+                            price,
+
+                            amount
+                        )
 
     except Exception as e:
 
         print(
+
             Fore.RED +
-            f"[WS PARSE ERROR] {e}"
+
+            f"[WS GENERAL ERROR] {e}"
         )
 
 
@@ -216,65 +316,91 @@ def on_message(ws, message):
 
 def subscribe_all_pairs(ws):
 
-    print(
-        Fore.YELLOW +
-        "[WS] Loading pairs..."
-    )
+    try:
 
-    pairs = get_all_pairs()
+        print(
 
-    subscribed = 0
+            Fore.YELLOW +
 
-    for pair in pairs:
+            "[WS] Loading pairs..."
+        )
 
-        try:
+        pairs = get_all_pairs()
 
-            # btc_idr -> btcidr
-            symbol = pair.replace(
-                "_",
-                ""
-            )
+        subscribed = 0
 
-            channel = (
-                f"market:trade-activity-{symbol}"
-            )
+        for pair in pairs:
 
-            subscribe_msg = {
+            try:
 
-                "method": 1,
-
-                "params": {
-                    "channel": channel
-                },
-
-                "id": int(time.time())
-            }
-
-            ws.send(
-                json.dumps(
-                    subscribe_msg
+                symbol = pair.replace(
+                    "_",
+                    ""
                 )
-            )
 
-            subscribed += 1
+                channel = (
+                    f"market:trade-activity-{symbol}"
+                )
 
-            print(
-                Fore.CYAN +
-                f"[WS] Subscribed: "
-                f"{channel}"
-            )
+                payload = {
 
-            # anti spam rate limit
-            time.sleep(0.03)
+                    "id": int(
+                        time.time() * 1000
+                    ),
 
-        except Exception:
-            pass
+                    "method":
+                    "public/subscribe",
 
-    print(
-        Fore.GREEN +
-        f"[WS] Total subscribed: "
-        f"{subscribed}"
-    )
+                    "params": {
+
+                        "channels": [
+                            channel
+                        ]
+                    }
+                }
+
+                ws.send(
+                    json.dumps(payload)
+                )
+
+                subscribed += 1
+
+                if subscribed % 50 == 0:
+
+                    print(
+
+                        Fore.CYAN +
+
+                        f"[WS] Subscribed "
+
+                        f"{subscribed}/"
+
+                        f"{len(pairs)}"
+                    )
+
+                # anti flood
+                time.sleep(0.02)
+
+            except Exception:
+                pass
+
+        print(
+
+            Fore.GREEN +
+
+            f"[WS] Total subscribed: "
+
+            f"{subscribed}"
+        )
+
+    except Exception as e:
+
+        print(
+
+            Fore.RED +
+
+            f"[WS SUB ERROR] {e}"
+        )
 
 
 # =========================================
@@ -284,7 +410,9 @@ def subscribe_all_pairs(ws):
 def on_error(ws, error):
 
     print(
+
         Fore.RED +
+
         f"[WS ERROR] {error}"
     )
 
@@ -294,31 +422,33 @@ def on_error(ws, error):
 # =========================================
 
 def on_close(
+
     ws,
+
     close_status_code,
+
     close_msg
 ):
 
     print(
+
         Fore.YELLOW +
+
         "[WS CLOSED] "
-        "Reconnect in 5s..."
+
+        "reconnecting in 5s..."
     )
 
     time.sleep(5)
 
-    start_websocket(
-        _callback
-    )
+    start_websocket(_callback)
 
 
 # =========================================
 # START
 # =========================================
 
-def start_websocket(
-    callback=None
-):
+def start_websocket(callback=None):
 
     global _callback
 
