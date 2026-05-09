@@ -5,14 +5,17 @@ class Config:
     # ---------- INDODAX API (isi dengan milik Anda) ----------
     INDODAX_API_KEY = os.getenv("INDODAX_API_KEY", "PIUNZQLD-YQJWUP2Y-ONXQKXAZ-RGO05AIX-XBRQNS8N")
     INDODAX_SECRET_KEY = os.getenv("INDODAX_SECRET_KEY", "82822911b3c91daebc2486abab12936576e42320764c7ac4f37289bf50ecd71f78137dab1cc76fc3")
-    INDODAX_BASE_URL = "https://indodax.com/api"
+    INDODAX_BASE_URL = "https://indodax.com"
 
     # config.py (tambahkan di bagian CONFIG)
     INDODAX_WS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE5NDY2MTg0MTV9.UR1lBM6Eqh0yWz-PVirw1uPCxe60FdchR8eNVdsskeo"   # Ganti dengan token asli
 
     # ---------- TRADING SETTINGS ----------
+    MAX_OPEN_POSITIONS = 3
+    MINIMUM_ORDER_IDR = 10000
+    REAL_TRADING = True
     ALLOW_REAL_ORDER = True          # Set True jika API key sudah benar & siap trading
-    MAX_POSITION_SIZE_USDT = 20.0     # Maksimal order per posisi (dalam USDT)
+    MAX_POSITION_SIZE_USDT = 10.0     # Maksimal order per posisi (dalam USDT)
     SCALPING_MODE = True
     TRAILING_STOP_PCT = 1.5           # Trailing stop 1.5%
     
@@ -25,7 +28,7 @@ class Config:
     REFRESH_INTERVAL = 60             # detik antar scan
     
     # ---------- TELEGRAM ----------
-    TELEGRAM_ENABLED = False
+    TELEGRAM_ENABLED = True
     TELEGRAM_BOT_TOKEN = "8640703551:AAFZgiOQ0C0ct7Tuhegx9zIlegqVJIbtVWc"
     TELEGRAM_CHAT_ID = "7211121595"
     
