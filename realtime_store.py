@@ -5,9 +5,16 @@ from collections import defaultdict
 from datetime import datetime
 
 
-# realtime candles
+# =========================================
+# STORAGE
+# =========================================
+
 market_data = defaultdict(list)
 
+
+# =========================================
+# ADD TRADE
+# =========================================
 
 def add_trade(
     pair,
@@ -15,43 +22,58 @@ def add_trade(
     volume
 ):
 
-    now = datetime.now()
+    try:
 
-    candle = {
+        candle = {
 
-        "timestamp": now,
+            "timestamp": datetime.now(),
 
-        "open": price,
+            "open": float(price),
 
-        "high": price,
+            "high": float(price),
 
-        "low": price,
+            "low": float(price),
 
-        "close": price,
+            "close": float(price),
 
-        "volume": volume
-    }
+            "volume": float(volume)
+        }
 
-    market_data[pair].append(candle)
-
-    # limit memory
-    if len(market_data[pair]) > 500:
-
-        market_data[pair] = (
-            market_data[pair][-500:]
+        market_data[pair].append(
+            candle
         )
 
+        # limit memory
+        if len(market_data[pair]) > 1000:
+
+            market_data[pair] = (
+                market_data[pair][-1000:]
+            )
+
+    except Exception:
+        pass
+
+
+# =========================================
+# GET DATAFRAME
+# =========================================
 
 def get_realtime_df(pair):
 
-    if pair not in market_data:
+    try:
+
+        if pair not in market_data:
+            return None
+
+        data = market_data[pair]
+
+        if len(data) < 30:
+            return None
+
+        df = pd.DataFrame(data)
+
+        return df
+
+    except Exception:
+
         return None
-
-    data = market_data[pair]
-
-    if len(data) < 30:
-        return None
-
-    df = pd.DataFrame(data)
-
-    return df
