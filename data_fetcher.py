@@ -1,5 +1,8 @@
+# data_fetcher.py
 import ccxt
 import pandas as pd
+import requests
+import time
 
 exchange = ccxt.indodax({
     'enableRateLimit': True,
@@ -7,13 +10,24 @@ exchange = ccxt.indodax({
 })
 
 def get_all_pairs():
+    """Ambil semua pair IDR dan USDT"""
     try:
         markets = exchange.load_markets()
         pairs = [symbol for symbol in markets if '_idr' in symbol or '_usdt' in symbol]
-        print(f"[DEBUG] Dapat {len(pairs)} pairs")
+        if pairs:
+            print(f"[✓] Mendapatkan {len(pairs)} pasangan via ccxt")
+            return pairs
+    except Exception as e:
+        print(f"[!] ccxt error: {e}, fallback ke API langsung...")
+    
+    # Fallback: API langsung Indodax
+    try:
+        data = requests.get("https://indodax.com/api/pairs", timeout=10).json()
+        pairs = [p['ticker_id'] for p in data if '_idr' in p['ticker_id'] or '_usdt' in p['ticker_id']]
+        print(f"[✓] Mendapatkan {len(pairs)} pasangan via API langsung")
         return pairs
     except Exception as e:
-        print(f"Error get pairs: {e}")
+        print(f"[!] Gagal total: {e}")
         return []
 
 def get_candles(pair, timeframe='1h'):
@@ -28,5 +42,5 @@ def get_candles(pair, timeframe='1h'):
         df = df.astype(float)
         return df
     except Exception as e:
-        print(f"Error fetching {pair} {timeframe}: {e}")
+        # Jangan print error setiap kali (bisa spam)
         return None
