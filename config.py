@@ -13,11 +13,13 @@ class Config:
     # ---------- TRADING SETTINGS ----------
     MAX_OPEN_POSITIONS = 3
     MINIMUM_ORDER_IDR = 10000
+    MAX_POSITION_SIZE_IDR = 10000
     REAL_TRADING = True
     ALLOW_REAL_ORDER = True          # Set True jika API key sudah benar & siap trading
-    MAX_POSITION_SIZE_USDT = 10.0     # Maksimal order per posisi (dalam USDT)
     SCALPING_MODE = True
     TRAILING_STOP_PCT = 1.5           # Trailing stop 1.5%
+    TAKE_PROFIT_PCT = 3
+    COOLDOWN_SECONDS = 300
     
     # ---------- DETECTOR THRESHOLD ----------
     WHALE_THRESHOLD_USDT = 5000       # Transaksi > 5k USDT
