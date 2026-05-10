@@ -1,9 +1,53 @@
+# =========================================
 # data_fetcher.py
+# SMART MARKET FETCHER FINAL
+# =========================================
 
 import ccxt
 import pandas as pd
 import time
+
 from colorama import Fore
+
+
+# =========================================
+# BLACKLIST PAIRS
+# =========================================
+
+BLACKLIST = {
+
+    "ab_idr",
+    "att_idr",
+    "cht_idr",
+    "cbg_idr"
+}
+
+
+# =========================================
+# TICKER CACHE
+# =========================================
+
+TICKER_CACHE = {}
+
+LAST_TICKER_UPDATE = 0
+
+
+# =========================================
+# SINGLE TICKER CACHE
+# =========================================
+
+SINGLE_TICKER_CACHE = {}
+
+LAST_SINGLE_UPDATE = {}
+
+
+# =========================================
+# CANDLE CACHE
+# =========================================
+
+CANDLE_CACHE = {}
+
+LAST_CANDLE_UPDATE = {}
 
 
 # =========================================
@@ -25,20 +69,66 @@ exchange = ccxt.indodax({
 
 
 # =========================================
+# GET TICKERS CACHE
+# =========================================
+
+def get_cached_tickers():
+
+    global TICKER_CACHE
+    global LAST_TICKER_UPDATE
+
+    now = time.time()
+
+    # cache 10 detik
+    if (
+        now - LAST_TICKER_UPDATE < 10
+        and
+        TICKER_CACHE
+    ):
+
+        return TICKER_CACHE
+
+    for _ in range(3):
+
+        try:
+
+            TICKER_CACHE = (
+                exchange.fetch_tickers()
+            )
+
+            LAST_TICKER_UPDATE = now
+
+            return TICKER_CACHE
+
+        except Exception as e:
+
+            print(
+                Fore.RED +
+                f"[CACHE ERROR] {e}"
+            )
+
+            time.sleep(1)
+
+    return TICKER_CACHE
+
+
+# =========================================
 # GET ALL PAIRS
 # =========================================
 
 def get_all_pairs(
 
     min_volume_idr=50_000_000,
+
     max_spread=1.5,
+
     top=30
 
 ):
 
     try:
 
-        tickers = exchange.fetch_tickers()
+        tickers = get_cached_tickers()
 
         valid_pairs = []
 
@@ -56,16 +146,28 @@ def get_all_pairs(
 
             try:
 
-                bid = float(ticker.get("bid") or 0)
-                ask = float(ticker.get("ask") or 0)
-                last = float(ticker.get("last") or 0)
+                bid = float(
+                    ticker.get("bid") or 0
+                )
 
-                # volume quote
+                ask = float(
+                    ticker.get("ask") or 0
+                )
+
+                last = float(
+                    ticker.get("last") or 0
+                )
+
+                # skip micin
+                if last < 1:
+                    continue
+
+                # volume IDR/USDT
                 quote_volume = float(
                     ticker.get("quoteVolume") or 0
                 )
 
-                # skip invalid
+                # invalid market
                 if (
                     bid <= 0
                     or ask <= 0
@@ -78,6 +180,21 @@ def get_all_pairs(
                     (ask - bid) / bid
                 ) * 100
 
+                # volatility %
+                change = abs(
+
+                    float(
+
+                        ticker.get("percentage")
+
+                        or
+
+                        ticker.get("change")
+
+                        or 0
+                    )
+                )
+
                 # filter volume
                 if quote_volume < min_volume_idr:
                     continue
@@ -86,9 +203,45 @@ def get_all_pairs(
                 if spread > max_spread:
                     continue
 
+                # skip market kurang aktif
+                if change < 0.3:
+                    continue
+
+                # format pair
                 formatted = (
                     s.replace("/", "_")
                 )
+
+                # blacklist
+                if formatted in BLACKLIST:
+                    continue
+
+                # =================================
+                # SCORING
+                # =================================
+
+                score = 0
+
+                # volume score
+                if quote_volume > 5_000_000_000:
+                    score += 3
+
+                elif quote_volume > 1_000_000_000:
+                    score += 2
+
+                # spread score
+                if spread < 0.3:
+                    score += 2
+
+                elif spread < 0.8:
+                    score += 1
+
+                # volatility score
+                if change > 3:
+                    score += 2
+
+                elif change > 1:
+                    score += 1
 
                 valid_pairs.append({
 
@@ -98,18 +251,28 @@ def get_all_pairs(
 
                     "spread": spread,
 
-                    "price": last
+                    "price": last,
+
+                    "change": change,
+
+                    "score": score
                 })
 
             except:
                 continue
 
-        # SORT BY VOLUME
+        # =====================================
+        # SORT BY SCORE + VOLUME
+        # =====================================
+
         valid_pairs = sorted(
 
             valid_pairs,
 
-            key=lambda x: x["volume"],
+            key=lambda x: (
+                x["score"],
+                x["volume"]
+            ),
 
             reverse=True
         )
@@ -118,15 +281,43 @@ def get_all_pairs(
         valid_pairs = valid_pairs[:top]
 
         pairs = [
+
             x["pair"]
+
             for x in valid_pairs
         ]
 
+        # =====================================
+        # DEBUG OUTPUT
+        # =====================================
+
         print(
             Fore.GREEN +
-            f"[✓] Smart pairs loaded: "
+            f"\n[✓] Smart pairs loaded: "
             f"{len(pairs)}"
         )
+
+        print(
+            Fore.CYAN +
+            "\n=== TOP PAIRS ==="
+        )
+
+        for p in valid_pairs[:10]:
+
+            print(
+
+                Fore.YELLOW +
+
+                f"{p['pair']} | "
+
+                f"Score={p['score']} | "
+
+                f"Spread={round(p['spread'], 2)}% | "
+
+                f"Change={round(p['change'], 2)}% | "
+
+                f"Vol={round(p['volume'])}"
+            )
 
         return pairs
 
@@ -138,28 +329,81 @@ def get_all_pairs(
         )
 
         return []
+
+
 # =========================================
 # GET CANDLES
 # =========================================
 
 def get_candles(
+
     pair,
+
     timeframe='1h',
+
     limit=200
+
 ):
 
     try:
 
-        # btc_idr -> BTC/IDR
+        now = time.time()
+
+        cache_key = f"{pair}_{timeframe}"
+
+        # =====================================
+        # CACHE TIMER
+        # =====================================
+
+        cache_time = 15
+
+        if timeframe == "1h":
+            cache_time = 60
+
+        elif timeframe == "15m":
+            cache_time = 30
+
+        elif timeframe == "5m":
+            cache_time = 15
+
+        # =====================================
+        # RETURN CACHE
+        # =====================================
+
+        if cache_key in LAST_CANDLE_UPDATE:
+
+            if (
+
+                now
+                -
+                LAST_CANDLE_UPDATE[cache_key]
+
+                < cache_time
+
+            ):
+
+                return CANDLE_CACHE.get(
+                    cache_key
+                )
+
+        # =====================================
+        # FETCH
+        # =====================================
+
         symbol = (
             pair
             .replace("_", "/")
             .upper()
         )
 
+        time.sleep(0.1)
+
         ohlcv = exchange.fetch_ohlcv(
+
             symbol=symbol,
+
             timeframe=timeframe,
+
             limit=limit
         )
 
@@ -193,7 +437,9 @@ def get_candles(
 
         # timestamp
         df['timestamp'] = pd.to_datetime(
+
             df['timestamp'],
+
             unit='ms'
         )
 
@@ -212,16 +458,29 @@ def get_candles(
         ]
 
         df[numeric_cols] = (
+
             df[numeric_cols]
+
             .astype(float)
         )
 
         # cleanup
         df = (
+
             df
+
             .dropna()
+
             .reset_index(drop=True)
         )
+
+        # =====================================
+        # SAVE CACHE
+        # =====================================
+
+        CANDLE_CACHE[cache_key] = df
+
+        LAST_CANDLE_UPDATE[cache_key] = now
 
         return df
 
@@ -238,9 +497,26 @@ def get_ticker(pair):
 
     try:
 
+        now = time.time()
+
+        # cache 5 detik
+        if pair in LAST_SINGLE_UPDATE:
+
+            if (
+                now - LAST_SINGLE_UPDATE[pair]
+                < 5
+            ):
+
+                return SINGLE_TICKER_CACHE.get(
+                    pair
+                )
+
         symbol = (
+
             pair
+
             .replace("_", "/")
+
             .upper()
         )
 
@@ -248,7 +524,7 @@ def get_ticker(pair):
             symbol
         )
 
-        return {
+        data = {
 
             "last": ticker.get("last"),
 
@@ -259,9 +535,15 @@ def get_ticker(pair):
             "volume": ticker.get("quoteVolume")
         }
 
+        SINGLE_TICKER_CACHE[pair] = data
+
+        LAST_SINGLE_UPDATE[pair] = now
+
+        return data
+
     except Exception:
 
-        return None
+        return SINGLE_TICKER_CACHE.get(pair)
 
 
 # =========================================
@@ -285,7 +567,13 @@ if __name__ == "__main__":
         "1h"
     )
 
-    print(df.tail())
+    if df is not None:
+
+        print(df.tail())
+
+    else:
+
+        print("No candle data")
 
     print("\n=== TICKER ===\n")
 
