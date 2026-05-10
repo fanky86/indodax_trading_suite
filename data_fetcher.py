@@ -181,18 +181,14 @@ def get_all_pairs(
                 ) * 100
 
                 # volatility %
+                high = float(
+                    ticker.get("high") or last
+                )
+                low = float(
+                    ticker.get("low") or last
+                )
                 change = abs(
-
-                    float(
-
-                        ticker.get("percentage")
-
-                        or
-
-                        ticker.get("change")
-
-                        or 0
-                    )
+                    ((high - low) / low) * 100
                 )
 
                 # filter volume
