@@ -368,7 +368,7 @@ def scan_pair(pair):
 
                 100,
 
-                abs(score) * 8
+                abs(score) * 6
             )
 
             # =================================
