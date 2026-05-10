@@ -1,6 +1,6 @@
 # =========================================
 # trading_engine.py
-# SMART AUTO TRADING ENGINE FINAL
+# SMART AUTO TRADING ENGINE FINAL SAFE
 # =========================================
 
 import time
@@ -31,6 +31,8 @@ class TradingEngine:
         self.open_positions = {}
 
         self.cooldowns = {}
+
+        self.daily_loss = 0
 
         # DEADMAN SWITCH
         self.last_heartbeat = time.time()
@@ -159,6 +161,19 @@ class TradingEngine:
             self.heartbeat()
 
             # =================================
+            # MAX DAILY LOSS
+            # =================================
+
+            if self.daily_loss <= -5:
+
+                print(
+                    Fore.RED +
+                    "[STOP] Daily loss limit reached"
+                )
+
+                return
+
+            # =================================
             # DRY RUN MODE
             # =================================
 
@@ -190,8 +205,8 @@ class TradingEngine:
                     self.cooldowns[pair]
                 )
 
-                # cooldown 10 menit
-                if elapsed < 600:
+                # cooldown 15 menit
+                if elapsed < 900:
 
                     print(
                         Fore.YELLOW +
@@ -492,6 +507,9 @@ class TradingEngine:
 
                 ) * 100
 
+                # update daily loss
+                self.daily_loss += pnl
+
                 print(
 
                     Fore.GREEN +
@@ -695,6 +713,21 @@ class TradingEngine:
                 return None
 
             # =================================
+            # BTC MARKET WEAK
+            # =================================
+
+            if (
+
+                tf_15m["trend"]
+
+                !=
+
+                "BULLISH"
+            ):
+
+                return None
+
+            # =================================
             # STRONG BUY
             # =================================
 
@@ -724,6 +757,16 @@ class TradingEngine:
 
                     "STRONG BUY"
                 ]
+
+                and
+
+                tf_15m["confidence"]
+
+                >= 70
+
+                and
+
+                tf_15m["rsi"] < 75
             ):
 
                 return {
@@ -763,6 +806,12 @@ class TradingEngine:
 
                     "STRONG SELL"
                 ]
+
+                and
+
+                tf_15m["confidence"]
+
+                >= 70
             ):
 
                 return {
