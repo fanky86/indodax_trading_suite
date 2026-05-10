@@ -1,14 +1,25 @@
+# =========================================
 # trading_engine.py
+# SMART AUTO TRADING ENGINE FINAL
+# =========================================
 
 import time
 import threading
+
 from colorama import Fore
+
 from config import Config
+
 from utils import (
+
     place_order,
+
     get_balance,
+
     cancel_order,
+
     send_telegram,
+
     log_to_csv
 )
 
@@ -19,20 +30,22 @@ class TradingEngine:
 
         self.open_positions = {}
 
+        self.cooldowns = {}
+
         # DEADMAN SWITCH
         self.last_heartbeat = time.time()
 
-    # =========================================
+    # =====================================
     # HEARTBEAT
-    # =========================================
+    # =====================================
 
     def heartbeat(self):
 
         self.last_heartbeat = time.time()
 
-    # =========================================
+    # =====================================
     # DEADMAN SWITCH MONITOR
-    # =========================================
+    # =====================================
 
     def deadman_switch_monitor(self):
 
@@ -41,11 +54,12 @@ class TradingEngine:
             try:
 
                 elapsed = (
-                    time.time() -
+                    time.time()
+                    -
                     self.last_heartbeat
                 )
 
-                # bot freeze > 120 detik
+                # bot freeze
                 if elapsed > 120:
 
                     print(
@@ -55,27 +69,42 @@ class TradingEngine:
                     )
 
                     send_telegram(
+
                         "⚠️ DEADMAN SWITCH ACTIVE\n"
+
                         "Bot timeout detected.\n"
+
                         "Cancelling all open orders..."
                     )
 
                     # cancel semua posisi
-                    for pair in list(self.open_positions.keys()):
+                    for pair in list(
 
-                        pos = self.open_positions[pair]
+                        self.open_positions.keys()
+                    ):
+
+                        pos = (
+                            self.open_positions[pair]
+                        )
 
                         try:
 
-                            order_id = pos.get("order_id")
+                            order_id = pos.get(
+                                "order_id"
+                            )
 
-                            side = pos.get("side")
+                            side = pos.get(
+                                "side"
+                            )
 
                             if order_id:
 
                                 result = cancel_order(
+
                                     pair,
+
                                     order_id,
+
                                     side
                                 )
 
@@ -93,8 +122,9 @@ class TradingEngine:
                                 f"Cancel error: {e}"
                             )
 
-                    # reset heartbeat
-                    self.last_heartbeat = time.time()
+                    self.last_heartbeat = (
+                        time.time()
+                    )
 
                 time.sleep(10)
 
@@ -107,35 +137,73 @@ class TradingEngine:
 
                 time.sleep(5)
 
-    # =========================================
+    # =====================================
     # OPEN POSITION
-    # =========================================
+    # =====================================
 
     def open_position(
+
         self,
+
         pair: str,
+
         side: str,
+
         price: float,
+
         amount: float
     ):
 
         try:
 
-            # heartbeat update
             self.heartbeat()
 
-            # REAL trading check
+            # =================================
+            # DRY RUN MODE
+            # =================================
+
             if not Config.REAL_TRADING:
 
                 print(
+
                     Fore.YELLOW +
+
                     f"[DRY RUN] "
-                    f"{side.upper()} {pair}"
+
+                    f"{side.upper()} "
+
+                    f"{pair}"
                 )
 
                 return
 
-            # anti duplicate
+            # =================================
+            # COOLDOWN
+            # =================================
+
+            now = time.time()
+
+            if pair in self.cooldowns:
+
+                elapsed = (
+                    now -
+                    self.cooldowns[pair]
+                )
+
+                # cooldown 10 menit
+                if elapsed < 600:
+
+                    print(
+                        Fore.YELLOW +
+                        f"[COOLDOWN] {pair}"
+                    )
+
+                    return
+
+            # =================================
+            # ANTI DUPLICATE
+            # =================================
+
             if pair in self.open_positions:
 
                 print(
@@ -146,10 +214,17 @@ class TradingEngine:
 
                 return
 
-            # max posisi
+            # =================================
+            # MAX POSITIONS
+            # =================================
+
             if (
+
                 len(self.open_positions)
-                >= Config.MAX_OPEN_POSITIONS
+
+                >=
+
+                Config.MAX_OPEN_POSITIONS
             ):
 
                 print(
@@ -160,7 +235,10 @@ class TradingEngine:
 
                 return
 
-            # minimum order
+            # =================================
+            # MINIMUM ORDER
+            # =================================
+
             if amount < Config.MINIMUM_ORDER_IDR:
 
                 print(
@@ -171,7 +249,10 @@ class TradingEngine:
 
                 return
 
-            # check balance
+            # =================================
+            # CHECK BALANCE
+            # =================================
+
             balance = get_balance()
 
             if not balance:
@@ -200,20 +281,37 @@ class TradingEngine:
 
                     return
 
+            # =================================
+            # ORDER LOG
+            # =================================
+
             print(
+
                 Fore.CYAN +
+
                 f"[ORDER] "
+
                 f"{side.upper()} "
+
                 f"{pair} "
+
                 f"Price={price} "
+
                 f"Amount={amount}"
             )
 
-            # place order
+            # =================================
+            # PLACE ORDER
+            # =================================
+
             result = place_order(
+
                 pair,
+
                 side,
+
                 price,
+
                 amount
             )
 
@@ -221,15 +319,17 @@ class TradingEngine:
 
                 print(
                     Fore.RED +
-                    "[ERROR] "
-                    "Order failed"
+                    "[ERROR] Order failed"
                 )
 
                 return
 
             print(result)
 
-            # success
+            # =================================
+            # SUCCESS
+            # =================================
+
             if result.get("success") == 1:
 
                 order_data = result.get(
@@ -238,44 +338,73 @@ class TradingEngine:
                 )
 
                 order_id = order_data.get(
+
                     "order_id",
+
                     str(time.time())
                 )
 
                 self.open_positions[pair] = {
+
                     "side": side,
+
                     "entry": price,
+
                     "amount": amount,
+
                     "order_id": order_id,
+
                     "timestamp": time.time(),
+
                     "highest": price,
+
                     "lowest": price
                 }
 
+                self.cooldowns[pair] = (
+                    time.time()
+                )
+
                 print(
+
                     Fore.GREEN +
+
                     f"[SUCCESS] "
+
                     f"OPEN {pair}"
                 )
 
                 send_telegram(
+
                     f"🔥 OPEN POSITION\n"
+
                     f"Pair: {pair}\n"
+
                     f"Side: {side}\n"
+
                     f"Price: {price}\n"
+
                     f"Amount: {amount}"
                 )
 
                 log_to_csv(
+
                     "trade_log.csv",
+
                     {
+
                         "time": time.strftime(
                             "%Y-%m-%d %H:%M:%S"
                         ),
+
                         "pair": pair,
+
                         "side": side,
+
                         "price": price,
+
                         "amount": amount,
+
                         "status": "OPEN"
                     }
                 )
@@ -294,13 +423,16 @@ class TradingEngine:
                 f"Open position error: {e}"
             )
 
-    # =========================================
+    # =====================================
     # CLOSE POSITION
-    # =========================================
+    # =====================================
 
     def close_position(
+
         self,
+
         pair: str,
+
         price: float
     ):
 
@@ -318,54 +450,88 @@ class TradingEngine:
             amount = pos["amount"]
 
             close_side = (
+
                 "sell"
+
                 if side == "buy"
+
                 else "buy"
             )
 
             result = place_order(
+
                 pair,
+
                 close_side,
+
                 price,
+
                 amount
             )
 
             if (
-                result and
+
+                result
+
+                and
+
                 result.get("success") == 1
             ):
 
                 pnl = (
+
                     (
-                        price -
+                        price
+                        -
                         pos["entry"]
-                    ) / pos["entry"]
+                    )
+
+                    /
+
+                    pos["entry"]
+
                 ) * 100
 
                 print(
+
                     Fore.GREEN +
+
                     f"[CLOSE] "
+
                     f"{pair} "
+
                     f"PNL={pnl:.2f}%"
                 )
 
                 send_telegram(
+
                     f"✅ CLOSE POSITION\n"
+
                     f"{pair}\n"
+
                     f"PNL={pnl:.2f}%"
                 )
 
                 log_to_csv(
+
                     "trade_log.csv",
+
                     {
+
                         "time": time.strftime(
                             "%Y-%m-%d %H:%M:%S"
                         ),
+
                         "pair": pair,
+
                         "side": close_side,
+
                         "price": price,
+
                         "amount": amount,
+
                         "pnl": pnl,
+
                         "status": "CLOSE"
                     }
                 )
@@ -379,13 +545,16 @@ class TradingEngine:
                 f"Close position error: {e}"
             )
 
-    # =========================================
+    # =====================================
     # TRAILING STOP
-    # =========================================
+    # =====================================
 
     def update_trailing_stop(
+
         self,
+
         pair: str,
+
         current_price: float
     ):
 
@@ -396,13 +565,16 @@ class TradingEngine:
 
             pos = self.open_positions[pair]
 
+            # update highest
             if current_price > pos["highest"]:
 
                 pos["highest"] = current_price
 
             highest = pos["highest"]
 
+            # trailing stop
             stop_price = highest * (
+
                 1 -
                 Config.TRAILING_STOP_PCT / 100
             )
@@ -426,9 +598,78 @@ class TradingEngine:
                 f"Trailing stop error: {e}"
             )
 
-    # =========================================
+    # =====================================
+    # TAKE PROFIT / STOP LOSS
+    # =====================================
+
+    def check_risk_management(
+
+        self,
+
+        pair: str,
+
+        current_price: float
+    ):
+
+        try:
+
+            if pair not in self.open_positions:
+                return
+
+            pos = self.open_positions[pair]
+
+            entry = pos["entry"]
+
+            pnl = (
+
+                (
+                    current_price
+                    -
+                    entry
+                )
+
+                /
+
+                entry
+
+            ) * 100
+
+            # TAKE PROFIT
+            if pnl >= Config.TAKE_PROFIT_PCT:
+
+                print(
+                    Fore.GREEN +
+                    f"[TAKE PROFIT] {pair}"
+                )
+
+                self.close_position(
+                    pair,
+                    current_price
+                )
+
+            # STOP LOSS
+            elif pnl <= -Config.STOP_LOSS_PCT:
+
+                print(
+                    Fore.RED +
+                    f"[STOP LOSS] {pair}"
+                )
+
+                self.close_position(
+                    pair,
+                    current_price
+                )
+
+        except Exception as e:
+
+            print(
+                Fore.RED +
+                f"Risk management error: {e}"
+            )
+
+    # =====================================
     # SCALPING SIGNAL
-    # =========================================
+    # =====================================
 
     def check_scalping_signal(
         self,
@@ -441,38 +682,93 @@ class TradingEngine:
 
             tf_5m = signals.get("5m")
 
-            if not tf_1m or not tf_5m:
+            tf_15m = signals.get("15m")
+
+            if (
+                not tf_1m
+                or
+                not tf_5m
+                or
+                not tf_15m
+            ):
+
                 return None
 
-            # BUY
+            # =================================
+            # STRONG BUY
+            # =================================
+
             if (
+
                 tf_1m["signal"]
-                in ["BUY", "STRONG BUY"]
+
+                ==
+
+                "STRONG BUY"
 
                 and
 
                 tf_5m["signal"]
-                in ["BUY", "STRONG BUY"]
+
+                ==
+
+                "STRONG BUY"
+
+                and
+
+                tf_15m["signal"]
+
+                in [
+
+                    "BUY",
+
+                    "STRONG BUY"
+                ]
             ):
 
                 return {
+
                     "action": "buy",
+
                     "entry": tf_1m["price"]
                 }
 
-            # SELL
+            # =================================
+            # STRONG SELL
+            # =================================
+
             if (
+
                 tf_1m["signal"]
-                in ["SELL", "STRONG SELL"]
+
+                ==
+
+                "STRONG SELL"
 
                 and
 
                 tf_5m["signal"]
-                in ["SELL", "STRONG SELL"]
+
+                ==
+
+                "STRONG SELL"
+
+                and
+
+                tf_15m["signal"]
+
+                in [
+
+                    "SELL",
+
+                    "STRONG SELL"
+                ]
             ):
 
                 return {
+
                     "action": "sell",
+
                     "entry": tf_1m["price"]
                 }
 
@@ -481,12 +777,17 @@ class TradingEngine:
         except Exception as e:
 
             print(
+
                 Fore.RED +
+
                 f"Scalping signal error: {e}"
             )
 
             return None
 
 
-# singleton
+# =========================================
+# SINGLETON
+# =========================================
+
 trading_engine = TradingEngine()
