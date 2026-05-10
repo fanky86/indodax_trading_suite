@@ -1,81 +1,362 @@
+# =========================================
 # utils.py
+# FINAL SAFE INDODAX UTILS
+# =========================================
+
 import requests
 import hmac
 import hashlib
 import time
-from datetime import datetime
+import csv
+import os
+
 from colorama import Fore
+
 from config import Config
 
+
+# =========================================
+# TELEGRAM
+# =========================================
+
 def send_telegram(message: str):
+
     if not Config.TELEGRAM_ENABLED:
         return
+
     try:
-        url = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": Config.TELEGRAM_CHAT_ID, "text": message}
-        requests.post(url, json=payload, timeout=5)
+
+        url = (
+
+            f"https://api.telegram.org/bot"
+
+            f"{Config.TELEGRAM_BOT_TOKEN}"
+
+            f"/sendMessage"
+        )
+
+        payload = {
+
+            "chat_id":
+
+            Config.TELEGRAM_CHAT_ID,
+
+            "text":
+
+            message
+        }
+
+        requests.post(
+
+            url,
+
+            json=payload,
+
+            timeout=5
+        )
+
     except Exception as e:
-        print(Fore.RED + f"Telegram error: {e}")
 
-def indodax_signed_request(endpoint: str, params: dict = None):
-    """Melakukan request ke private API Indodax"""
-    if not Config.INDODAX_API_KEY or "ISI_API_KEY" in Config.INDODAX_API_KEY:
-        print(Fore.YELLOW + "[WARNING] API key belum diisi, real order disabled.")
-        return None
-    if params is None:
-        params = {}
-    params['timestamp'] = int(time.time() * 1000)
-    param_str = "&".join([f"{k}={v}" for k, v in sorted(params.items())])
-    sign = hmac.new(Config.INDODAX_SECRET_KEY.encode('utf-8'),
-                    param_str.encode('utf-8'),
-                    hashlib.sha512).hexdigest()
-    headers = {"Key": Config.INDODAX_API_KEY, "Sign": sign}
-    url = f"{Config.INDODAX_BASE_URL}/{endpoint}"
-    try:
-        resp = requests.post(url, data=params, headers=headers, timeout=10)
-        return resp.json()
-    except Exception as e:
-        print(Fore.RED + f"Signed request error: {e}")
-        return None
+        print(
+            Fore.RED +
+            f"Telegram error: {e}"
+        )
 
-def get_balance(coin='usdt'):
-    res = indodax_signed_request('getInfo')
-    if res and 'return' in res and 'balance' in res['return']:
-        return float(res['return']['balance'].get(coin, 0))
-    return 0.0
 
-def place_order(pair: str, order_type: str, price: float, amount: float):
-    """order_type: 'buy' atau 'sell'"""
-    if not Config.ALLOW_REAL_ORDER:
-        print(Fore.CYAN + f"[SIMULASI] {order_type.upper()} {amount:.8f} {pair} @ {price}")
-        return {"success": True, "simulate": True}
-    params = {
-        "pair": pair,
-        "type": order_type,
-        "price": str(price),
-        "amount": str(amount)
-    }
-    return indodax_signed_request('trade', params)
+# =========================================
+# PRIVATE API REQUEST
+# =========================================
 
-def log_to_csv(data: dict, filename: str = "trading_log.csv"):
-    import csv
-    import os
-    file_exists = os.path.isfile(filename)
-    with open(filename, 'a', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=data.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(data)
+def indodax_signed_request(
 
-def cancel_order(
-    pair: str,
-    order_id: str,
-    side: str
+    method: str,
+
+    params: dict = None
 ):
 
     """
-    Cancel open order
+    Private API request
     """
+
+    try:
+
+        # =================================
+        # API CHECK
+        # =================================
+
+        if not Config.INDODAX_API_KEY:
+
+            print(
+                Fore.RED +
+                "[ERROR] API key missing"
+            )
+
+            return None
+
+        if params is None:
+
+            params = {}
+
+        # =================================
+        # REQUIRED PARAMS
+        # =================================
+
+        params["method"] = method
+
+        params["nonce"] = str(
+            int(time.time() * 1000)
+        )
+
+        # =================================
+        # PAYLOAD
+        # =================================
+
+        payload = "&".join(
+
+            [
+
+                f"{k}={v}"
+
+                for k, v
+
+                in sorted(params.items())
+            ]
+        )
+
+        # =================================
+        # SIGNATURE
+        # =================================
+
+        sign = hmac.new(
+
+            Config
+            .INDODAX_SECRET_KEY
+            .encode(),
+
+            payload.encode(),
+
+            hashlib.sha512
+
+        ).hexdigest()
+
+        headers = {
+
+            "Key":
+
+            Config.INDODAX_API_KEY,
+
+            "Sign":
+
+            sign
+        }
+
+        # =================================
+        # REQUEST
+        # =================================
+
+        url = (
+            f"{Config.INDODAX_BASE_URL}/tapi"
+        )
+
+        response = requests.post(
+
+            url,
+
+            data=params,
+
+            headers=headers,
+
+            timeout=10
+        )
+
+        # =================================
+        # DEBUG RESPONSE
+        # =================================
+
+        print(
+
+            Fore.BLUE +
+
+            f"[API RESPONSE] "
+
+            f"{response.text}"
+        )
+
+        return response.json()
+
+    except Exception as e:
+
+        print(
+            Fore.RED +
+            f"Signed request error: {e}"
+        )
+
+        return None
+
+
+# =========================================
+# GET BALANCE
+# =========================================
+
+def get_balance(coin='idr'):
+
+    try:
+
+        result = indodax_signed_request(
+            "getInfo"
+        )
+
+        if not result:
+
+            return {}
+
+        if result.get("success") != 1:
+
+            print(
+
+                Fore.RED +
+
+                f"[BALANCE ERROR] "
+
+                f"{result}"
+            )
+
+            return {}
+
+        balances = (
+
+            result
+
+            .get("return", {})
+
+            .get("balance", {})
+        )
+
+        return balances
+
+    except Exception as e:
+
+        print(
+            Fore.RED +
+            f"Get balance error: {e}"
+        )
+
+        return {}
+
+
+# =========================================
+# PLACE ORDER
+# =========================================
+
+def place_order(
+
+    pair: str,
+
+    order_type: str,
+
+    price: float,
+
+    amount: float
+):
+
+    """
+    order_type:
+    buy / sell
+    """
+
+    try:
+
+        # =================================
+        # SIMULATION MODE
+        # =================================
+
+        if not Config.ALLOW_REAL_ORDER:
+
+            print(
+
+                Fore.CYAN +
+
+                f"[SIMULATION] "
+
+                f"{order_type.upper()} "
+
+                f"{pair} "
+
+                f"@ {price}"
+            )
+
+            return {
+
+                "success": 1,
+
+                "simulate": True
+            }
+
+        # =================================
+        # BUY ORDER
+        # =================================
+
+        if order_type.lower() == "buy":
+
+            params = {
+
+                "pair": pair,
+
+                "type": "buy",
+
+                "price": str(price),
+
+                "idr": str(amount)
+            }
+
+        # =================================
+        # SELL ORDER
+        # =================================
+
+        else:
+
+            params = {
+
+                "pair": pair,
+
+                "type": "sell",
+
+                "price": str(price),
+
+                "coin": str(amount)
+            }
+
+        result = indodax_signed_request(
+
+            "trade",
+
+            params
+        )
+
+        return result
+
+    except Exception as e:
+
+        print(
+            Fore.RED +
+            f"Place order error: {e}"
+        )
+
+        return None
+
+
+# =========================================
+# CANCEL ORDER
+# =========================================
+
+def cancel_order(
+
+    pair: str,
+
+    order_id: str,
+
+    side: str
+):
 
     try:
 
@@ -89,7 +370,9 @@ def cancel_order(
         }
 
         result = indodax_signed_request(
+
             "cancelOrder",
+
             params
         )
 
@@ -98,10 +381,16 @@ def cancel_order(
     except Exception as e:
 
         print(
+            Fore.RED +
             f"Cancel order error: {e}"
         )
 
         return None
+
+
+# =========================================
+# OPEN ORDERS
+# =========================================
 
 def get_open_orders(pair: str):
 
@@ -112,7 +401,9 @@ def get_open_orders(pair: str):
         }
 
         result = indodax_signed_request(
+
             "openOrders",
+
             params
         )
 
@@ -121,7 +412,56 @@ def get_open_orders(pair: str):
     except Exception as e:
 
         print(
+            Fore.RED +
             f"Open orders error: {e}"
         )
 
         return None
+
+
+# =========================================
+# CSV LOGGER
+# =========================================
+
+def log_to_csv(
+
+    filename: str,
+
+    data: dict
+):
+
+    try:
+
+        file_exists = os.path.isfile(
+            filename
+        )
+
+        with open(
+
+            filename,
+
+            'a',
+
+            newline=''
+
+        ) as f:
+
+            writer = csv.DictWriter(
+
+                f,
+
+                fieldnames=data.keys()
+            )
+
+            if not file_exists:
+
+                writer.writeheader()
+
+            writer.writerow(data)
+
+    except Exception as e:
+
+        print(
+            Fore.RED +
+            f"CSV log error: {e}"
+        )
