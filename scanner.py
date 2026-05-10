@@ -24,10 +24,49 @@ from config import Config
 
 
 # =========================================
+# SAFE PAIRS ONLY
+# =========================================
+
+SAFE_PAIRS = {
+
+    # majors
+    "btc_idr",
+    "eth_idr",
+    "bnb_idr",
+    "sol_idr",
+    "xrp_idr",
+    "ada_idr",
+    "doge_idr",
+    "trx_idr",
+    "link_idr",
+    "dot_idr",
+
+    # growing
+    "sui_idr",
+    "ondo_idr",
+    "ton_idr",
+    "hbar_idr",
+    "pengu_idr",
+
+    # meme safe-ish
+    "pepe_idr",
+    "bonk_idr"
+}
+
+
+# =========================================
 # MAIN SCANNER
 # =========================================
 
 def scan_pair(pair):
+
+    # =====================================
+    # SAFE FILTER
+    # =====================================
+
+    if pair not in SAFE_PAIRS:
+
+        return {}
 
     result = {}
 
@@ -116,11 +155,11 @@ def scan_pair(pair):
 
             score = 0
 
-            # =================================
-            # RSI
-            # =================================
-
             rsi = ind["rsi"]
+
+            # =================================
+            # RSI SCORE
+            # =================================
 
             # bullish momentum
             if 50 <= rsi <= 70:
@@ -137,12 +176,12 @@ def scan_pair(pair):
 
                 score += 4
 
-            # strong bullish trend
+            # strong bullish
             elif 70 < rsi <= 80:
 
                 score += 1
 
-            # too overbought
+            # overbought
             elif rsi > 80:
 
                 score -= 2
@@ -179,6 +218,29 @@ def scan_pair(pair):
                 score -= 1
 
             # =================================
+            # EMA ALIGNMENT BONUS
+            # =================================
+
+            if (
+
+                ind["trend"] == "BULLISH"
+
+                and
+
+                ind["macd"]
+
+                >
+
+                ind["macd_signal"]
+
+                and
+
+                rsi > 55
+            ):
+
+                score += 2
+
+            # =================================
             # VOLUME SURGE
             # =================================
 
@@ -187,7 +249,7 @@ def scan_pair(pair):
                 score += 2
 
             # =================================
-            # BTC MARKET FILTER
+            # BTC FILTER
             # =================================
 
             if btc_bullish:
@@ -233,7 +295,7 @@ def scan_pair(pair):
                     score -= 2
 
             # =================================
-            # CANDLE PATTERNS
+            # PATTERN RECOGNITION
             # =================================
 
             bullish_patterns = [
@@ -284,11 +346,11 @@ def scan_pair(pair):
 
                 if momentum > 3:
 
-                    score += 3
+                    score += 2
 
                 elif momentum > 1:
 
-                    score += 2
+                    score += 1
 
                 elif momentum < -3:
 
@@ -319,7 +381,7 @@ def scan_pair(pair):
                     "STRONG BUY"
                 )
 
-            elif score >= 6:
+            elif score >= 5:
 
                 signal = (
                     "BUY"
@@ -331,7 +393,7 @@ def scan_pair(pair):
                     "STRONG SELL"
                 )
 
-            elif score <= -6:
+            elif score <= -5:
 
                 signal = (
                     "SELL"
