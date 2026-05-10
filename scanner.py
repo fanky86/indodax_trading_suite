@@ -1,4 +1,7 @@
+# =========================================
 # scanner.py
+# SMART AI SCANNER FINAL
+# =========================================
 
 from data_fetcher import (
     get_candles
@@ -20,13 +23,17 @@ from ai_models import (
 from config import Config
 
 
+# =========================================
+# MAIN SCANNER
+# =========================================
+
 def scan_pair(pair):
 
     result = {}
 
-    # =========================
-    # BTC FILTER
-    # =========================
+    # =====================================
+    # BTC MARKET FILTER
+    # =====================================
 
     btc_df = get_candles(
         "btc_idr",
@@ -47,9 +54,9 @@ def scan_pair(pair):
 
             btc_bullish = False
 
-    # =========================
-    # MAIN LOOP
-    # =========================
+    # =====================================
+    # MULTI TIMEFRAME LOOP
+    # =====================================
 
     for tf in Config.TIMEFRAMES:
 
@@ -60,6 +67,7 @@ def scan_pair(pair):
                 tf
             )
 
+            # minimum candle
             if (
 
                 df is None
@@ -71,9 +79,9 @@ def scan_pair(pair):
 
                 continue
 
-            # =====================
+            # =================================
             # INDICATORS
-            # =====================
+            # =================================
 
             ind = (
                 calculate_indicators(
@@ -93,50 +101,67 @@ def scan_pair(pair):
                 )
             )
 
-            # =====================
+            # =================================
             # AI PREDICTION
-            # =====================
+            # =================================
 
             lstm_pred = (
                 ai_predictor
                 .predict_next_price(df)
             )
 
-            # =====================
+            # =================================
             # SCORE SYSTEM
-            # =====================
+            # =================================
 
             score = 0
 
+            # =================================
             # RSI
+            # =================================
 
-            if ind["rsi"] < 30:
+            rsi = ind["rsi"]
+
+            # bullish momentum
+            if 50 <= rsi <= 70:
 
                 score += 3
 
-            elif ind["rsi"] < 40:
-
-                score += 1
-
-            elif ind["rsi"] > 70:
-
-                score -= 3
-
-            elif ind["rsi"] > 60:
-
-                score -= 1
-
-            # TREND
-
-            if ind["trend"] == "BULLISH":
+            # oversold bounce
+            elif 30 <= rsi < 50:
 
                 score += 2
 
-            else:
+            # extreme oversold
+            elif rsi < 30:
+
+                score += 4
+
+            # strong bullish trend
+            elif 70 < rsi <= 80:
+
+                score += 1
+
+            # too overbought
+            elif rsi > 80:
 
                 score -= 2
 
+            # =================================
+            # TREND
+            # =================================
+
+            if ind["trend"] == "BULLISH":
+
+                score += 3
+
+            else:
+
+                score -= 1
+
+            # =================================
             # MACD
+            # =================================
 
             if (
 
@@ -147,19 +172,23 @@ def scan_pair(pair):
                 ind["macd_signal"]
             ):
 
-                score += 2
+                score += 3
 
             else:
 
-                score -= 2
+                score -= 1
 
-            # VOLUME
+            # =================================
+            # VOLUME SURGE
+            # =================================
 
             if ind["vol_surge"]:
 
-                score += 1
+                score += 2
 
-            # BTC FILTER
+            # =================================
+            # BTC MARKET FILTER
+            # =================================
 
             if btc_bullish:
 
@@ -167,9 +196,11 @@ def scan_pair(pair):
 
             else:
 
-                score -= 2
+                score -= 1
 
-            # AI
+            # =================================
+            # AI PREDICTION
+            # =================================
 
             if lstm_pred:
 
@@ -177,6 +208,7 @@ def scan_pair(pair):
                     ind["last_price"]
                 )
 
+                # bullish prediction
                 if (
 
                     lstm_pred
@@ -186,8 +218,9 @@ def scan_pair(pair):
                     current * 1.01
                 ):
 
-                    score += 2
+                    score += 3
 
+                # bearish prediction
                 elif (
 
                     lstm_pred
@@ -199,7 +232,9 @@ def scan_pair(pair):
 
                     score -= 2
 
-            # PATTERN
+            # =================================
+            # CANDLE PATTERNS
+            # =================================
 
             bullish_patterns = [
 
@@ -219,54 +254,98 @@ def scan_pair(pair):
 
                 if p in bullish_patterns:
 
-                    score += 1
+                    score += 2
 
                 elif p in bearish_patterns:
 
-                    score -= 1
+                    score -= 2
 
-            # =====================
+            # =================================
+            # EXTRA MOMENTUM
+            # =================================
+
+            try:
+
+                momentum = (
+
+                    (
+                        df['close'].iloc[-1]
+
+                        -
+
+                        df['close'].iloc[-5]
+                    )
+
+                    /
+
+                    df['close'].iloc[-5]
+
+                ) * 100
+
+                if momentum > 3:
+
+                    score += 3
+
+                elif momentum > 1:
+
+                    score += 2
+
+                elif momentum < -3:
+
+                    score -= 3
+
+            except:
+
+                pass
+
+            # =================================
             # CONFIDENCE
-            # =====================
+            # =================================
 
             confidence = min(
 
                 100,
 
-                abs(score) * 10
+                abs(score) * 8
             )
 
-            # =====================
+            # =================================
             # SIGNAL
-            # =====================
+            # =================================
 
-            if score >= 8:
+            if score >= 10:
 
                 signal = (
                     "STRONG BUY"
                 )
 
-            elif score >= 4:
+            elif score >= 6:
 
-                signal = "BUY"
+                signal = (
+                    "BUY"
+                )
 
-            elif score <= -8:
+            elif score <= -10:
 
                 signal = (
                     "STRONG SELL"
                 )
 
-            elif score <= -4:
+            elif score <= -6:
 
-                signal = "SELL"
+                signal = (
+                    "SELL"
+                )
 
             else:
 
-                signal = "HOLD"
+                signal = (
+                    "HOLD"
+                )
 
-            # =====================
-            # DEBUG
-            # =====================
+            # =================================
+            # DEBUG OUTPUT
+            # =================================
 
             print(
 
@@ -285,9 +364,9 @@ def scan_pair(pair):
                 f"{signal}"
             )
 
-            # =====================
+            # =================================
             # RESULT
-            # =====================
+            # =================================
 
             result[tf] = {
 
