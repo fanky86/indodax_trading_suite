@@ -118,9 +118,9 @@ def get_cached_tickers():
 
 def get_all_pairs(
 
-    min_volume_idr=50_000_000,
+    min_volume_idr=5_000_000,
 
-    max_spread=1.5,
+    max_spread=5,
 
     top=30
 
@@ -204,8 +204,8 @@ def get_all_pairs(
                     continue
 
                 # skip market kurang aktif
-                if change < 0.3:
-                    continue
+                # if change < 0.3:
+                   # continue
 
                 # format pair
                 formatted = (
