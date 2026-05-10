@@ -28,35 +28,104 @@ exchange = ccxt.indodax({
 # GET ALL PAIRS
 # =========================================
 
-def get_all_pairs():
+def get_all_pairs(
+
+    min_volume_idr=50_000_000,
+    max_spread=1.5,
+    top=30
+
+):
 
     try:
 
-        markets = exchange.load_markets()
+        tickers = exchange.fetch_tickers()
 
-        pairs = []
+        valid_pairs = []
 
-        for symbol in markets.keys():
+        for symbol, ticker in tickers.items():
 
             s = symbol.lower()
 
+            # hanya IDR / USDT
             if (
-                "/idr" in s
-                or
-                "/usdt" in s
+                "/idr" not in s
+                and
+                "/usdt" not in s
             ):
+                continue
 
-                # BTC/IDR -> btc_idr
+            try:
+
+                bid = float(ticker.get("bid") or 0)
+                ask = float(ticker.get("ask") or 0)
+                last = float(ticker.get("last") or 0)
+
+                # volume quote
+                quote_volume = float(
+                    ticker.get("quoteVolume") or 0
+                )
+
+                # skip invalid
+                if (
+                    bid <= 0
+                    or ask <= 0
+                    or last <= 0
+                ):
+                    continue
+
+                # spread %
+                spread = (
+                    (ask - bid) / bid
+                ) * 100
+
+                # filter volume
+                if quote_volume < min_volume_idr:
+                    continue
+
+                # filter spread
+                if spread > max_spread:
+                    continue
+
                 formatted = (
                     s.replace("/", "_")
                 )
 
-                pairs.append(formatted)
+                valid_pairs.append({
+
+                    "pair": formatted,
+
+                    "volume": quote_volume,
+
+                    "spread": spread,
+
+                    "price": last
+                })
+
+            except:
+                continue
+
+        # SORT BY VOLUME
+        valid_pairs = sorted(
+
+            valid_pairs,
+
+            key=lambda x: x["volume"],
+
+            reverse=True
+        )
+
+        # LIMIT
+        valid_pairs = valid_pairs[:top]
+
+        pairs = [
+            x["pair"]
+            for x in valid_pairs
+        ]
 
         print(
             Fore.GREEN +
-            f"[✓] Mendapatkan "
-            f"{len(pairs)} pasangan via CCXT"
+            f"[✓] Smart pairs loaded: "
+            f"{len(pairs)}"
         )
 
         return pairs
@@ -69,8 +138,6 @@ def get_all_pairs():
         )
 
         return []
-
-
 # =========================================
 # GET CANDLES
 # =========================================
@@ -189,7 +256,7 @@ def get_ticker(pair):
 
             "ask": ticker.get("ask"),
 
-            "volume": ticker.get("baseVolume")
+            "volume": ticker.get("quoteVolume")
         }
 
     except Exception:
