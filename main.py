@@ -155,7 +155,7 @@ def scanning_loop():
             # LOOP ALL PAIRS
             # =================================
 
-            for pair in pairs[:150]:
+            for pair in pairs[:200]:
 
                 try:
 
