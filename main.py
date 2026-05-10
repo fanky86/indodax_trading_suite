@@ -1,5 +1,5 @@
 # =========================================
-# MAIN.PY (SAFE UPGRADE VERSION)
+# MAIN.PY (FINAL SAFE AUTO TRADING)
 # =========================================
 
 import threading
@@ -43,12 +43,34 @@ init(autoreset=True)
 # SETTINGS
 # =========================================
 
-MIN_DAILY_VOLUME = 10000000
+MIN_DAILY_VOLUME = 10_000_000
 
 BLACKLIST = [
+
     "att_idr",
     "alt_idr"
 ]
+
+SAFE_PAIRS = {
+
+    "btc_idr",
+    "eth_idr",
+    "bnb_idr",
+    "sol_idr",
+    "xrp_idr",
+    "ada_idr",
+    "doge_idr",
+    "trx_idr",
+    "link_idr",
+    "dot_idr",
+    "sui_idr",
+    "ondo_idr",
+    "ton_idr",
+    "hbar_idr",
+    "pengu_idr",
+    "pepe_idr",
+    "bonk_idr"
+}
 
 LAST_ENTRY = {}
 
@@ -158,6 +180,13 @@ def scanning_loop():
             for pair in pairs[:200]:
 
                 try:
+
+                    # =============================
+                    # SAFE FILTER
+                    # =============================
+
+                    if pair not in SAFE_PAIRS:
+                        continue
 
                     # =============================
                     # BLACKLIST FILTER
@@ -300,7 +329,7 @@ def scanning_loop():
                     # RSI FILTER
                     # =============================
 
-                    if rsi > 75:
+                    if rsi > 72:
 
                         print(
 
@@ -358,7 +387,7 @@ def scanning_loop():
                     vol_idr = float(
 
                         ticker.get(
-                            "vol_idr",
+                            "volume",
                             0
                         )
                     )
@@ -463,11 +492,11 @@ def scanning_loop():
 
                         and
 
-                        buy_count >= 3
+                        buy_count >= 2
 
                         and
 
-                        rsi < 60
+                        rsi < 72
 
                         and
 
