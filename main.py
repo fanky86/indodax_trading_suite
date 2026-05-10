@@ -144,7 +144,7 @@ def scanning_loop():
             # LOOP ALL PAIRS
             # =================================
 
-            for pair in pairs[:80]:
+            for pair in pairs[:150]:
 
                 try:
 
