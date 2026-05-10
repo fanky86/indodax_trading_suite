@@ -1,9 +1,10 @@
 # =========================================
-# MAIN.PY (UPGRADE SMART AUTO TRADING)
+# MAIN.PY (SAFE UPGRADE VERSION)
 # =========================================
 
 import threading
-import time,os
+import time
+import os
 
 from colorama import (
     Fore,
@@ -38,6 +39,18 @@ from utils import (
 
 init(autoreset=True)
 
+# =========================================
+# SETTINGS
+# =========================================
+
+MIN_DAILY_VOLUME = 10000000
+
+BLACKLIST = [
+    "att_idr",
+    "alt_idr"
+]
+
+LAST_ENTRY = {}
 
 # =========================================
 # WEBSOCKET CALLBACK
@@ -60,7 +73,6 @@ def websocket_callback(
         0
     )
 
-
 # =========================================
 # WEBSOCKET THREAD
 # =========================================
@@ -79,7 +91,6 @@ def start_websocket_thread():
             Fore.RED +
             f"[WS THREAD ERROR] {e}"
         )
-
 
 # =========================================
 # MAIN SCANNER LOOP
@@ -148,6 +159,51 @@ def scanning_loop():
 
                 try:
 
+                    # =============================
+                    # BLACKLIST FILTER
+                    # =============================
+
+                    if pair in BLACKLIST:
+
+                        print(
+
+                            Fore.YELLOW +
+
+                            f"[BLACKLIST] {pair}"
+                        )
+
+                        continue
+
+                    # =============================
+                    # COOLDOWN FILTER
+                    # =============================
+
+                    now = time.time()
+
+                    if pair in LAST_ENTRY:
+
+                        if (
+
+                            now
+                            -
+                            LAST_ENTRY[pair]
+                            <
+                            3600
+                        ):
+
+                            print(
+
+                                Fore.YELLOW +
+
+                                "[FILTER] Cooldown aktif"
+                            )
+
+                            continue
+
+                    # =============================
+                    # SCAN MARKET
+                    # =============================
+
                     signals = scan_pair(pair)
 
                     if not signals:
@@ -179,9 +235,19 @@ def scanning_loop():
                         0
                     )
 
-                    # =================================
+                    support = main_signal.get(
+                        "support",
+                        price
+                    )
+
+                    resistance = main_signal.get(
+                        "resistance",
+                        price
+                    )
+
+                    # =============================
                     # UPDATE DASHBOARD
-                    # =================================
+                    # =============================
 
                     update_dashboard(
 
@@ -194,9 +260,9 @@ def scanning_loop():
                         rsi
                     )
 
-                    # =================================
+                    # =============================
                     # DEBUG SIGNAL
-                    # =================================
+                    # =============================
 
                     if signal != "HOLD":
 
@@ -215,9 +281,9 @@ def scanning_loop():
                             f"Price={price}"
                         )
 
-                    # =================================
+                    # =============================
                     # BTC FILTER
-                    # =================================
+                    # =============================
 
                     if btc_market_bearish:
 
@@ -230,11 +296,11 @@ def scanning_loop():
 
                         continue
 
-                    # =================================
+                    # =============================
                     # RSI FILTER
-                    # =================================
+                    # =============================
 
-                    if rsi > 80:
+                    if rsi > 75:
 
                         print(
 
@@ -245,19 +311,9 @@ def scanning_loop():
 
                         continue
 
-                    # =================================
+                    # =============================
                     # VOLATILITY FILTER
-                    # =================================
-
-                    support = main_signal.get(
-                        "support",
-                        price
-                    )
-
-                    resistance = main_signal.get(
-                        "resistance",
-                        price
-                    )
+                    # =============================
 
                     volatility = (
 
@@ -268,7 +324,7 @@ def scanning_loop():
                         / price
                     ) * 100
 
-                    if volatility < 1:
+                    if volatility < 2:
 
                         print(
 
@@ -279,47 +335,76 @@ def scanning_loop():
 
                         continue
 
-                    # =================================
-                    # SPREAD FILTER
-                    # =================================
+                    # =============================
+                    # TICKER DATA
+                    # =============================
 
                     ticker = get_ticker(pair)
 
-                    if ticker:
+                    if not ticker:
 
-                        bid = ticker.get(
-                            "bid",
+                        continue
+
+                    bid = ticker.get(
+                        "bid",
+                        0
+                    )
+
+                    ask = ticker.get(
+                        "ask",
+                        0
+                    )
+
+                    vol_idr = float(
+
+                        ticker.get(
+                            "vol_idr",
                             0
                         )
+                    )
 
-                        ask = ticker.get(
-                            "ask",
-                            0
+                    # =============================
+                    # VOLUME FILTER
+                    # =============================
+
+                    if vol_idr < MIN_DAILY_VOLUME:
+
+                        print(
+
+                            Fore.YELLOW +
+
+                            "[FILTER] Volume kecil"
                         )
 
-                        if bid and ask:
+                        continue
 
-                            spread = (
+                    # =============================
+                    # SPREAD FILTER
+                    # =============================
 
-                                (ask - bid)
+                    if bid and ask:
 
-                                / ask
-                            ) * 100
+                        spread = (
 
-                            if spread > 1:
+                            (ask - bid)
 
-                                print(
+                            / ask
+                        ) * 100
 
-                                    Fore.YELLOW +
+                        if spread > 1:
 
-                                    "[FILTER] Spread too high"
-                                )
+                            print(
 
-                                continue
+                                Fore.YELLOW +
 
-                    # =================================
+                                "[FILTER] Spread too high"
+                            )
+
+                            continue
+
+                    # =============================
                     # MULTI TF CONFIRMATION
-                    # =================================
+                    # =============================
 
                     buy_count = 0
 
@@ -348,9 +433,9 @@ def scanning_loop():
 
                             buy_count += 1
 
-                    # =================================
+                    # =============================
                     # POSITION SIZE
-                    # =================================
+                    # =============================
 
                     if confidence >= 90:
 
@@ -364,9 +449,9 @@ def scanning_loop():
 
                         amount = 10000
 
-                    # =================================
+                    # =============================
                     # AUTO BUY
-                    # =================================
+                    # =============================
 
                     if (
 
@@ -374,11 +459,19 @@ def scanning_loop():
 
                         and
 
-                        confidence >= 70
+                        confidence >= 80
 
                         and
 
-                        buy_count >= 2
+                        buy_count >= 3
+
+                        and
+
+                        rsi < 60
+
+                        and
+
+                        volatility >= 2
 
                         and
 
@@ -403,6 +496,8 @@ def scanning_loop():
                             amount=amount
                         )
 
+                        LAST_ENTRY[pair] = time.time()
+
                         send_telegram(
 
                             f"🔥 AUTO BUY\n"
@@ -411,12 +506,14 @@ def scanning_loop():
 
                             f"Price: {price}\n"
 
-                            f"Confidence: {confidence}%"
+                            f"Confidence: {confidence}%\n"
+
+                            f"RSI: {rsi}"
                         )
 
-                    # =================================
+                    # =============================
                     # AUTO SELL
-                    # =================================
+                    # =============================
 
                     if (
 
@@ -457,9 +554,9 @@ def scanning_loop():
                                 f"Price: {price}"
                             )
 
-                    # =================================
+                    # =============================
                     # TRAILING STOP UPDATE
-                    # =================================
+                    # =============================
 
                     for pos_pair in list(
 
@@ -527,15 +624,18 @@ def scanning_loop():
 
             time.sleep(5)
 
-
 # =========================================
 # START
 # =========================================
 
 if __name__ == "__main__":
+
     try:
+
         os.system("git pull")
+
     except:
+
         pass
 
     print(
@@ -545,12 +645,13 @@ if __name__ == "__main__":
         """
 ╔══════════════════════════════════════════╗
 ║      SMART AI TRADING ENGINE            ║
-║  FULL REALTIME | AI | AUTO TRADING      ║
+║  SAFE REALTIME | AI | AUTO TRADING      ║
 ╚══════════════════════════════════════════╝
 """
     )
 
-    # scanner
+    # scanner thread
+
     scanner_thread = threading.Thread(
 
         target=scanning_loop,
@@ -560,7 +661,8 @@ if __name__ == "__main__":
 
     scanner_thread.start()
 
-    # websocket
+    # websocket thread
+
     ws_thread = threading.Thread(
 
         target=start_websocket_thread,
@@ -578,6 +680,7 @@ if __name__ == "__main__":
     )
 
     # dashboard
+
     if Config.ENABLE_DASHBOARD:
 
         print(
