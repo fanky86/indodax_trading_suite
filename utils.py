@@ -1,6 +1,6 @@
 # =========================================
 # utils.py
-# FINAL SAFE INDODAX UTILS
+# FINAL PRODUCTION FIXED INDODAX UTILS
 # =========================================
 
 import requests
@@ -9,10 +9,33 @@ import hashlib
 import time
 import csv
 import os
+import threading
 
 from colorama import Fore
 
 from config import Config
+
+
+# =========================================
+# NONCE GENERATOR (THREAD SAFE)
+# =========================================
+
+NONCE_COUNTER = int(
+    time.time() * 1000
+)
+
+NONCE_LOCK = threading.Lock()
+
+
+def generate_nonce():
+
+    global NONCE_COUNTER
+
+    with NONCE_LOCK:
+
+        NONCE_COUNTER += 1
+
+        return str(NONCE_COUNTER)
 
 
 # =========================================
@@ -38,11 +61,9 @@ def send_telegram(message: str):
         payload = {
 
             "chat_id":
-
             Config.TELEGRAM_CHAT_ID,
 
             "text":
-
             message
         }
 
@@ -98,17 +119,23 @@ def indodax_signed_request(
             params = {}
 
         # =================================
-        # REQUIRED PARAMS
+        # METHOD
         # =================================
 
-        params["method"] = method
+        if "method" not in params:
 
-        params["nonce"] = str(
-            int(time.time() * 1000)
-        )
+            params["method"] = method
+
+        # =================================
+        # NONCE
+        # =================================
+
+        params["nonce"] = generate_nonce()
 
         # =================================
         # PAYLOAD
+        # IMPORTANT:
+        # DO NOT SORT
         # =================================
 
         payload = "&".join(
@@ -119,8 +146,13 @@ def indodax_signed_request(
 
                 for k, v
 
-                in sorted(params.items())
+                in params.items()
             ]
+        )
+
+        print(
+            Fore.YELLOW +
+            f"[PAYLOAD] {payload}"
         )
 
         # =================================
@@ -131,22 +163,25 @@ def indodax_signed_request(
 
             Config
             .INDODAX_SECRET_KEY
-            .encode(),
+            .encode("utf-8"),
 
-            payload.encode(),
+            payload.encode("utf-8"),
 
             hashlib.sha512
 
         ).hexdigest()
 
+        print(
+            Fore.CYAN +
+            f"[SIGN] {sign}"
+        )
+
         headers = {
 
             "Key":
-
             Config.INDODAX_API_KEY,
 
             "Sign":
-
             sign
         }
 
@@ -166,23 +201,48 @@ def indodax_signed_request(
 
             headers=headers,
 
-            timeout=10
+            timeout=15
         )
-
-        # =================================
-        # DEBUG RESPONSE
-        # =================================
 
         print(
-
             Fore.BLUE +
-
-            f"[API RESPONSE] "
-
-            f"{response.text}"
+            f"[HTTP {response.status_code}]"
         )
 
-        return response.json()
+        print(
+            Fore.BLUE +
+            f"[API RESPONSE] {response.text}"
+        )
+
+        # =================================
+        # HTTP ERROR CHECK
+        # =================================
+
+        if response.status_code != 200:
+
+            print(
+                Fore.RED +
+                f"[HTTP ERROR] {response.status_code}"
+            )
+
+            return None
+
+        # =================================
+        # JSON RESPONSE
+        # =================================
+
+        try:
+
+            return response.json()
+
+        except Exception:
+
+            print(
+                Fore.RED +
+                f"[INVALID JSON] {response.text}"
+            )
+
+            return None
 
     except Exception as e:
 
@@ -230,6 +290,11 @@ def get_balance(coin='idr'):
             .get("return", {})
 
             .get("balance", {})
+        )
+
+        print(
+            Fore.GREEN +
+            f"[BALANCE] {balances}"
         )
 
         return balances
@@ -293,6 +358,12 @@ def place_order(
             }
 
         # =================================
+        # FORMAT PRICE
+        # =================================
+
+        price = int(float(price))
+
+        # =================================
         # BUY ORDER
         # =================================
 
@@ -300,13 +371,13 @@ def place_order(
 
             params = {
 
-                "pair": pair,
+                "pair": str(pair),
 
                 "type": "buy",
 
                 "price": str(price),
 
-                "idr": str(amount)
+                "idr": str(int(amount))
             }
 
         # =================================
@@ -315,16 +386,34 @@ def place_order(
 
         else:
 
+            coin_amount = (
+
+                float(amount)
+
+                /
+
+                float(price)
+            )
+
             params = {
 
-                "pair": pair,
+                "pair": str(pair),
 
                 "type": "sell",
 
                 "price": str(price),
 
-                "coin": str(amount)
+                "coin": f"{coin_amount:.8f}"
             }
+
+        print(
+
+            Fore.GREEN +
+
+            f"[ORDER REQUEST] "
+
+            f"{params}"
+        )
 
         result = indodax_signed_request(
 
@@ -332,6 +421,27 @@ def place_order(
 
             params
         )
+
+        print(
+            Fore.BLUE +
+            f"[ORDER RESULT] {result}"
+        )
+
+        if result:
+
+            if result.get("success") == 1:
+
+                print(
+                    Fore.GREEN +
+                    "[ORDER SUCCESS]"
+                )
+
+            else:
+
+                print(
+                    Fore.RED +
+                    f"[ORDER FAILED] {result}"
+                )
 
         return result
 
@@ -442,7 +552,9 @@ def log_to_csv(
 
             'a',
 
-            newline=''
+            newline='',
+
+            encoding='utf-8'
 
         ) as f:
 
