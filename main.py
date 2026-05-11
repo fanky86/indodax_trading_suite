@@ -177,7 +177,7 @@ def scanning_loop():
             # LOOP ALL PAIRS
             # =================================
 
-            for pair in pairs[:200]:
+            for pair in pairs:
 
                 try:
 
@@ -217,7 +217,7 @@ def scanning_loop():
                             -
                             LAST_ENTRY[pair]
                             <
-                            3600
+                            900
                         ):
 
                             print(
@@ -353,7 +353,7 @@ def scanning_loop():
                         / price
                     ) * 100
 
-                    if volatility < 0.7:
+                    if volatility < 0.3:
 
                         print(
 
@@ -500,7 +500,7 @@ def scanning_loop():
 
                         and
 
-                        volatility >= 2
+                        volatility >= 0.3
 
                         and
 
