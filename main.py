@@ -353,7 +353,7 @@ def scanning_loop():
                         / price
                     ) * 100
 
-                    if volatility < 2:
+                    if volatility < 0.7:
 
                         print(
 
@@ -492,7 +492,7 @@ def scanning_loop():
 
                         and
 
-                        buy_count >= 2
+                        buy_count >= 3
 
                         and
 
