@@ -492,7 +492,7 @@ def scanning_loop():
 
                         and
 
-                        buy_count >= 3
+                        buy_count >= 2
 
                         and
 
