@@ -488,7 +488,7 @@ def scanning_loop():
 
                         and
 
-                        confidence >= 80
+                        confidence >= 70
 
                         and
 
@@ -496,12 +496,24 @@ def scanning_loop():
 
                         and
 
-                        rsi < 72
+                        rsi < 70
 
                         and
 
                         volatility >= 0.3
 
+                        and
+                        
+                        signals.get(
+                            
+                            "15m",
+                            {}
+                        ).get(
+                            "signal"
+                        ) in [
+                            "BUY",
+                            "STRONG BUY"
+                        ]
                         and
 
                         pair not in trading_engine.open_positions
