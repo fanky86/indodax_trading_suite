@@ -38,7 +38,7 @@ class Config:
     TELEGRAM_CHAT_ID = "7211121595"
     
     # ---------- WEB DASHBOARD ----------
-    DASHBOARD_PORT = 5000
+    DASHBOARD_PORT = 5001
     ENABLE_DASHBOARD = True
     
     # ---------- LSTM ----------
