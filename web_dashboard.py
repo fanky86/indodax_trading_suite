@@ -370,4 +370,4 @@ def update_dashboard(pair, price, signal=None, rsi=None):
     socketio.emit('update', latest_data)
 
 def run_dashboard():
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    socketio.run(app, host='0.0.0.0', port=5001, debug=False)
